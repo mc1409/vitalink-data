@@ -30,6 +30,8 @@ interface ProcessingState {
   extractedData: ExtractedData | null;
   savedRecords: any[];
   logs: ProcessingLog[];
+  streamingText: string;
+  showStreamingText: boolean;
 }
 
 const MedicalDataProcessor: React.FC = () => {
@@ -42,7 +44,9 @@ const MedicalDataProcessor: React.FC = () => {
     isProcessing: false,
     extractedData: null,
     savedRecords: [],
-    logs: []
+    logs: [],
+    streamingText: '',
+    showStreamingText: false
   });
   
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -83,6 +87,9 @@ const MedicalDataProcessor: React.FC = () => {
   const extractTextFromFile = async (file: File): Promise<string> => {
     addLog('Text Extraction', 'processing', 'Starting text extraction from uploaded file...');
     
+    // Show streaming text area
+    setProcessing(prev => ({ ...prev, showStreamingText: true, streamingText: '' }));
+    
     try {
       const formData = new FormData();
       formData.append('file', file);
@@ -95,6 +102,12 @@ const MedicalDataProcessor: React.FC = () => {
         }
       }
 
+      // Simulate streaming by showing progress
+      setProcessing(prev => ({ 
+        ...prev, 
+        streamingText: `Processing ${file.name} (${file.size} bytes)...\n\nExtracting text content...` 
+      }));
+
       const { data, error } = await supabase.functions.invoke('extract-document-text', {
         body: formData,
       });
@@ -105,6 +118,24 @@ const MedicalDataProcessor: React.FC = () => {
         throw new Error(data.error || 'Failed to extract text from file');
       }
 
+      // Stream the extracted text progressively
+      const fullText = data.extractedText;
+      let currentText = '';
+      const chunkSize = 50;
+      
+      for (let i = 0; i < fullText.length; i += chunkSize) {
+        currentText += fullText.slice(i, i + chunkSize);
+        setProcessing(prev => ({ 
+          ...prev, 
+          streamingText: `📄 Extracted from ${file.name}:\n\n${currentText}${i + chunkSize < fullText.length ? '...' : ''}` 
+        }));
+        
+        // Small delay to show streaming effect
+        if (i + chunkSize < fullText.length) {
+          await new Promise(resolve => setTimeout(resolve, 50));
+        }
+      }
+
       addLog('Text Extraction', 'success', `Successfully extracted ${data.extractedText.length} characters from file`, {
         textLength: data.extractedText.length,
         preview: data.extractedText.substring(0, 200) + '...'
@@ -112,6 +143,10 @@ const MedicalDataProcessor: React.FC = () => {
 
       return data.extractedText;
     } catch (error: any) {
+      setProcessing(prev => ({ 
+        ...prev, 
+        streamingText: `❌ Error extracting text from ${file.name}:\n\n${error.message}` 
+      }));
       addLog('Text Extraction', 'error', `Failed to extract text: ${error.message}`);
       throw error;
     }
@@ -422,7 +457,9 @@ const MedicalDataProcessor: React.FC = () => {
       step: 0,
       logs: [],
       extractedData: null,
-      savedRecords: []
+      savedRecords: [],
+      streamingText: '',
+      showStreamingText: false
     }));
 
     try {
@@ -442,9 +479,14 @@ const MedicalDataProcessor: React.FC = () => {
           text = textInput.trim();
           addLog('Text Extraction', 'warning', 'File processing failed, using provided text input instead');
         }
-      } else if (text) {
-        addLog('Text Extraction', 'success', `Using provided text input (${text.length} characters)`);
-      }
+        } else if (text) {
+          setProcessing(prev => ({ 
+            ...prev, 
+            showStreamingText: true,
+            streamingText: `📝 Using provided text input (${text.length} characters):\n\n${text.substring(0, 500)}${text.length > 500 ? '...' : ''}` 
+          }));
+          addLog('Text Extraction', 'success', `Using provided text input (${text.length} characters)`);
+        }
 
       // Step 2: Process with AI
       updateProcessingStep(2, 'Processing with AI to extract medical data...');
@@ -736,6 +778,28 @@ const MedicalDataProcessor: React.FC = () => {
           </Button>
         </CardContent>
       </Card>
+
+      {/* Streaming Text Display */}
+      {processing.showStreamingText && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Extracted Text Stream
+            </CardTitle>
+            <CardDescription>
+              Real-time view of text being extracted from your document
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="bg-muted p-4 rounded-lg min-h-[200px] max-h-[400px] overflow-y-auto">
+              <pre className="text-sm whitespace-pre-wrap font-mono">
+                {processing.streamingText || 'Preparing to extract text...'}
+              </pre>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Processing and Results */}
       {(processing.logs.length > 0 || processing.isProcessing) && (
