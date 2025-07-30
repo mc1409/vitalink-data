@@ -15,10 +15,21 @@ serve(async (req) => {
   try {
     const formData = await req.formData();
     const file = formData.get('file') as File;
-    const fileType = formData.get('fileType') as string;
+    let fileType = formData.get('fileType') as string;
 
     if (!file) {
       throw new Error('No file provided');
+    }
+
+    // If fileType is not provided, try to infer from file extension
+    if (!fileType && file.name) {
+      const extension = file.name.split('.').pop()?.toLowerCase();
+      fileType = extension || 'unknown';
+    }
+
+    // Ensure fileType is not null/undefined
+    if (!fileType) {
+      fileType = 'unknown';
     }
 
     console.log(`Processing file: ${file.name}, type: ${fileType}, size: ${file.size} bytes`);
