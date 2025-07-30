@@ -47,6 +47,15 @@ interface ExtractedData {
   recommendations: string[];
 }
 
+interface ProcessingStep {
+  id: number;
+  timestamp: string;
+  step: string;
+  status: 'running' | 'completed' | 'error';
+  details: string;
+  data?: any;
+}
+
 const PDFUploadProcessor = () => {
   const { user } = useAuth();
   const [dragActive, setDragActive] = useState(false);
@@ -58,6 +67,8 @@ const PDFUploadProcessor = () => {
   const [aiAnalysis, setAiAnalysis] = useState<ExtractedData | null>(null);
   const [uploadHistory, setUploadHistory] = useState<ProcessingLog[]>([]);
   const [selectedLog, setSelectedLog] = useState<ProcessingLog | null>(null);
+  const [processingSteps, setProcessingSteps] = useState<ProcessingStep[]>([]);
+  const [showDetailedLogs, setShowDetailedLogs] = useState(false);
 
   const fetchUploadHistory = async () => {
     try {
@@ -73,6 +84,29 @@ const PDFUploadProcessor = () => {
       console.log('Upload history not available yet - table may not exist');
       setUploadHistory([]);
     }
+  };
+
+  const addProcessingStep = (step: string, status: 'running' | 'completed' | 'error', details: string, data?: any) => {
+    const newStep: ProcessingStep = {
+      id: Date.now(),
+      timestamp: new Date().toISOString(),
+      step,
+      status,
+      details,
+      data
+    };
+    setProcessingSteps(prev => [...prev, newStep]);
+    console.log(`[${step}] ${details}`, data || '');
+  };
+
+  const updateProcessingStep = (stepId: number, status: 'completed' | 'error', details?: string, data?: any) => {
+    setProcessingSteps(prev => 
+      prev.map(step => 
+        step.id === stepId 
+          ? { ...step, status, ...(details && { details }), ...(data && { data }) }
+          : step
+      )
+    );
   };
 
   React.useEffect(() => {
@@ -97,14 +131,37 @@ const PDFUploadProcessor = () => {
   };
 
   const processWithAI = async (text: string, filename: string): Promise<ExtractedData> => {
+    const aiRequestStepId = Date.now();
+    
+    // Log the prompt being sent
+    const prompt = {
+      extractedText: text,
+      filename: filename
+    };
+    
+    addProcessingStep('AI_REQUEST_PREP', 'running', 'Preparing AI analysis request...', {
+      model: 'Azure OpenAI GPT-4',
+      endpoint: 'process-medical-document edge function',
+      textLength: text.length,
+      requestPayload: prompt
+    });
+    
     const { data, error } = await supabase.functions.invoke('process-medical-document', {
-      body: {
-        extractedText: text,
-        filename: filename
-      }
+      body: prompt
     });
 
-    if (error) throw error;
+    if (error) {
+      updateProcessingStep(aiRequestStepId, 'error', `AI analysis failed: ${error.message}`, {
+        error: error.message
+      });
+      throw error;
+    }
+    
+    updateProcessingStep(aiRequestStepId, 'completed', 'AI analysis request successful', {
+      responseReceived: true,
+      response: data
+    });
+    
     return data;
   };
 
@@ -170,26 +227,64 @@ const PDFUploadProcessor = () => {
       return;
     }
 
+    // Clear previous logs and reset state
+    setProcessingSteps([]);
     setCurrentFile(file);
     setUploading(true);
     setProgress(0);
+    setExtractedText('');
+    setAiAnalysis(null);
+    setShowDetailedLogs(true);
+
+    const startTime = Date.now();
+    addProcessingStep('INIT', 'completed', `Starting upload process for ${file.name}`, {
+      fileName: file.name,
+      fileSize: `${(file.size / 1024 / 1024).toFixed(2)} MB`,
+      fileType: file.type,
+      userId: user.id
+    });
 
     try {
       // Step 1: Upload to storage
+      const uploadStepId = Date.now();
+      addProcessingStep('STORAGE_UPLOAD', 'running', 'Uploading PDF to Supabase storage...');
       setProgress(20);
+      
       const storagePath = await uploadToStorage(file);
+      updateProcessingStep(uploadStepId, 'completed', `File uploaded successfully to: ${storagePath}`, {
+        storagePath,
+        bucket: 'medical-pdfs'
+      });
       
       // Step 2: Create processing log
+      const logStepId = Date.now();
+      addProcessingStep('CREATE_LOG', 'running', 'Creating database processing log...');
       setProgress(40);
+      
       const logId = await createProcessingLog(file, storagePath);
+      updateProcessingStep(logStepId, 'completed', `Processing log created with ID: ${logId}`, {
+        logId,
+        table: 'document_processing_logs'
+      });
       
       // Step 3: Extract text
+      const extractStepId = Date.now();
+      addProcessingStep('TEXT_EXTRACTION', 'running', 'Extracting text from PDF using PDF.js...');
       setProgress(60);
       setProcessing(true);
+      
       const text = await extractTextFromPDF(file);
       setExtractedText(text);
+      updateProcessingStep(extractStepId, 'completed', `Extracted ${text.length} characters from PDF`, {
+        textLength: text.length,
+        textPreview: text.substring(0, 500) + (text.length > 500 ? '...' : ''),
+        fullText: text
+      });
       
       // Update log with extracted text
+      const updateLogStepId = Date.now();
+      addProcessingStep('UPDATE_LOG_TEXT', 'running', 'Updating processing log with extracted text...');
+      
       try {
         await supabase
           .from('document_processing_logs' as any)
@@ -199,23 +294,54 @@ const PDFUploadProcessor = () => {
             ai_analysis_status: 'processing'
           })
           .eq('id', logId);
+        updateProcessingStep(updateLogStepId, 'completed', 'Processing log updated with extracted text');
       } catch (error) {
+        updateProcessingStep(updateLogStepId, 'error', 'Failed to update processing log');
         console.log('Could not update processing log:', error);
       }
       
       // Step 4: AI Analysis
+      const aiStepId = Date.now();
+      addProcessingStep('AI_ANALYSIS', 'running', 'Sending extracted text to Azure OpenAI for medical data analysis...');
       setProgress(80);
+      
       const aiResult = await processWithAI(text, file.name);
       setAiAnalysis(aiResult);
+      updateProcessingStep(aiStepId, 'completed', `AI analysis completed with ${Math.round(aiResult.confidence * 100)}% confidence`, {
+        documentType: aiResult.documentType,
+        confidence: aiResult.confidence,
+        extractedFieldsCount: Object.keys(aiResult.extractedFields).length,
+        recommendationsCount: aiResult.recommendations.length,
+        fullAnalysis: aiResult
+      });
       
       // Step 5: Save to database
+      const saveStepId = Date.now();
+      addProcessingStep('SAVE_DATABASE', 'running', 'Saving structured data to health database tables...');
       setProgress(100);
+      
       await saveToDatabase(logId, aiResult);
+      updateProcessingStep(saveStepId, 'completed', 'Structured data saved successfully to database', {
+        tablesUpdated: Object.keys(aiResult.extractedFields),
+        logId
+      });
+      
+      const endTime = Date.now();
+      const totalTime = ((endTime - startTime) / 1000).toFixed(2);
+      addProcessingStep('COMPLETED', 'completed', `Document processing completed successfully in ${totalTime} seconds`, {
+        totalTime: `${totalTime}s`,
+        stepsCompleted: processingSteps.length + 1
+      });
       
       toast.success('Document processed successfully!');
       fetchUploadHistory();
       
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      addProcessingStep('ERROR', 'error', `Processing failed: ${errorMessage}`, {
+        error: errorMessage,
+        stack: error instanceof Error ? error.stack : undefined
+      });
       console.error('Upload error:', error);
       toast.error('Failed to process document');
     } finally {
@@ -290,8 +416,9 @@ const PDFUploadProcessor = () => {
       </div>
 
       <Tabs defaultValue="upload" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="upload">Upload & Process</TabsTrigger>
+          <TabsTrigger value="logs">Processing Logs</TabsTrigger>
           <TabsTrigger value="history">Upload History</TabsTrigger>
           <TabsTrigger value="analysis">AI Analysis</TabsTrigger>
         </TabsList>
@@ -510,6 +637,63 @@ const PDFUploadProcessor = () => {
               </p>
             </div>
           )}
+        </TabsContent>
+
+        <TabsContent value="logs" className="space-y-6">
+          <Card className="shadow-medical">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Brain className="h-5 w-5" />
+                Detailed Processing Logs
+              </CardTitle>
+              <CardDescription>
+                Step-by-step breakdown of the document processing pipeline
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {processingSteps.length === 0 ? (
+                <div className="text-center py-8">
+                  <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <p className="text-muted-foreground">
+                    Upload a document to see detailed processing logs
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {processingSteps.map((step, index) => (
+                    <Card key={step.id} className="border-l-4 border-l-primary/20">
+                      <CardContent className="p-4">
+                        <div className="flex items-start gap-3">
+                          <div className={`w-3 h-3 rounded-full mt-1 ${
+                            step.status === 'completed' ? 'bg-green-500' :
+                            step.status === 'error' ? 'bg-red-500' : 'bg-yellow-500 animate-pulse'
+                          }`} />
+                          <div className="flex-1 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="font-medium text-sm">
+                                Step {index + 1}: {step.step}
+                              </span>
+                              <span className="text-xs text-muted-foreground">
+                                {new Date(step.timestamp).toLocaleTimeString()}
+                              </span>
+                            </div>
+                            <p className="text-sm text-muted-foreground">{step.details}</p>
+                            {step.data && (
+                              <ScrollArea className="h-32 w-full border rounded p-3 bg-muted/50">
+                                <pre className="text-xs whitespace-pre-wrap">
+                                  {JSON.stringify(step.data, null, 2)}
+                                </pre>
+                              </ScrollArea>
+                            )}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>
