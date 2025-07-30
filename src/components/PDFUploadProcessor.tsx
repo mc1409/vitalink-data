@@ -192,12 +192,38 @@ const PDFUploadProcessor = () => {
 
   const uploadToStorage = async (file: File): Promise<string> => {
     const filename = `${user?.id}/${Date.now()}-${file.name}`;
-    const { data, error } = await supabase.storage
-      .from('medical-pdfs')
-      .upload(filename, file);
+    
+    console.log('Starting storage upload:', { 
+      filename, 
+      fileSize: file.size, 
+      fileType: file.type,
+      userId: user?.id 
+    });
+    
+    try {
+      const { data, error } = await supabase.storage
+        .from('medical-pdfs')
+        .upload(filename, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
 
-    if (error) throw error;
-    return filename;
+      if (error) {
+        console.error('Storage upload error details:', {
+          error: error,
+          message: error.message,
+          filename,
+          fileSize: file.size
+        });
+        throw new Error(`Storage upload failed: ${error.message}`);
+      }
+      
+      console.log('Storage upload successful:', { data, filename });
+      return filename;
+    } catch (uploadError) {
+      console.error('Storage upload exception:', uploadError);
+      throw uploadError;
+    }
   };
 
   const createProcessingLog = async (file: File, storagePath: string): Promise<string> => {
