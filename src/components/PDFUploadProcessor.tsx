@@ -114,20 +114,52 @@ const PDFUploadProcessor = () => {
   }, []);
 
   const extractTextFromPDF = async (file: File): Promise<string> => {
-    const arrayBuffer = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-    let fullText = '';
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      
+      // Configure PDF.js worker for better performance
+      pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+      
+      const loadingTask = pdfjsLib.getDocument({ 
+        data: arrayBuffer,
+        // Optimize PDF.js settings for faster processing
+        useSystemFonts: true,
+        disableFontFace: true,
+        standardFontDataUrl: null
+      });
+      
+      const pdf = await loadingTask.promise;
+      const pagePromises: Promise<string>[] = [];
 
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const textContent = await page.getTextContent();
-      const pageText = textContent.items
-        .map((item: any) => item.str)
-        .join(' ');
-      fullText += pageText + '\n';
+      // Process all pages in parallel for much faster extraction
+      for (let i = 1; i <= pdf.numPages; i++) {
+        pagePromises.push(
+          pdf.getPage(i).then(async (page) => {
+            const textContent = await page.getTextContent();
+            const pageText = textContent.items
+              .filter((item: any) => item.str && item.str.trim()) // Filter out empty strings
+              .map((item: any) => item.str)
+              .join(' ');
+            
+            // Clean up the page to free memory
+            page.cleanup();
+            return pageText;
+          })
+        );
+      }
+
+      // Wait for all pages to be processed in parallel
+      const pageTexts = await Promise.all(pagePromises);
+      const fullText = pageTexts.join('\n').trim();
+      
+      // Clean up the PDF document
+      pdf.destroy();
+      
+      return fullText;
+    } catch (error) {
+      console.error('PDF text extraction error:', error);
+      throw new Error(`Failed to extract text from PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
-
-    return fullText.trim();
   };
 
   const processWithAI = async (text: string, filename: string): Promise<ExtractedData> => {
