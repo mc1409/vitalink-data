@@ -20,10 +20,8 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/components/AuthProvider';
 import { toast } from 'sonner';
-import * as pdfjsLib from 'pdfjs-dist';
+import { FileProcessor, ExtractionResult, ProcessingProgress } from '@/utils/FileProcessor';
 
-// Configure PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
 interface ProcessingLog {
   id: string;
@@ -113,53 +111,29 @@ const PDFUploadProcessor = () => {
     fetchUploadHistory();
   }, []);
 
-  const extractTextFromPDF = async (file: File): Promise<string> => {
-    try {
-      const arrayBuffer = await file.arrayBuffer();
+  const extractTextFromDocument = async (file: File): Promise<ExtractionResult> => {
+    return await FileProcessor.extractText(file, (progress: ProcessingProgress) => {
+      // Convert FileProcessor progress to our existing step system
+      const stepMapping: { [key: string]: string } = {
+        'validation': 'FILE_VALIDATION',
+        'detection': 'FILE_TYPE_DETECTION',
+        'pdf_loading': 'PDF_LOADING',
+        'pdf_extraction': 'TEXT_EXTRACTION',
+        'docx_processing': 'TEXT_EXTRACTION',
+        'text_reading': 'TEXT_EXTRACTION',
+        'csv_parsing': 'TEXT_EXTRACTION',
+        'excel_processing': 'TEXT_EXTRACTION',
+        'completed': 'EXTRACTION_COMPLETED'
+      };
+
+      const stepId = Date.now();
+      const stepName = stepMapping[progress.stage] || 'PROCESSING';
       
-      // Configure PDF.js worker for better performance
-      pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
-      
-      const loadingTask = pdfjsLib.getDocument({ 
-        data: arrayBuffer,
-        // Optimize PDF.js settings for faster processing
-        useSystemFonts: true,
-        disableFontFace: true,
-        standardFontDataUrl: null
+      addProcessingStep(stepName, 'running', progress.message, {
+        stage: progress.stage,
+        progress: progress.progress
       });
-      
-      const pdf = await loadingTask.promise;
-      const pagePromises: Promise<string>[] = [];
-
-      // Process all pages in parallel for much faster extraction
-      for (let i = 1; i <= pdf.numPages; i++) {
-        pagePromises.push(
-          pdf.getPage(i).then(async (page) => {
-            const textContent = await page.getTextContent();
-            const pageText = textContent.items
-              .filter((item: any) => item.str && item.str.trim()) // Filter out empty strings
-              .map((item: any) => item.str)
-              .join(' ');
-            
-            // Clean up the page to free memory
-            page.cleanup();
-            return pageText;
-          })
-        );
-      }
-
-      // Wait for all pages to be processed in parallel
-      const pageTexts = await Promise.all(pagePromises);
-      const fullText = pageTexts.join('\n').trim();
-      
-      // Clean up the PDF document
-      pdf.destroy();
-      
-      return fullText;
-    } catch (error) {
-      console.error('PDF text extraction error:', error);
-      throw new Error(`Failed to extract text from PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+    });
   };
 
   const processWithAI = async (text: string, filename: string): Promise<ExtractedData> => {
@@ -279,7 +253,7 @@ const PDFUploadProcessor = () => {
     try {
       // Step 1: Upload to storage
       const uploadStepId = Date.now();
-      addProcessingStep('STORAGE_UPLOAD', 'running', 'Uploading PDF to Supabase storage...');
+      addProcessingStep('STORAGE_UPLOAD', 'running', 'Uploading document to Supabase storage...');
       setProgress(20);
       
       const storagePath = await uploadToStorage(file);
@@ -299,18 +273,28 @@ const PDFUploadProcessor = () => {
         table: 'document_processing_logs'
       });
       
-      // Step 3: Extract text
+      // Step 3: Extract text using intelligent file processor
       const extractStepId = Date.now();
-      addProcessingStep('TEXT_EXTRACTION', 'running', 'Extracting text from PDF using PDF.js...');
+      addProcessingStep('TEXT_EXTRACTION', 'running', `Extracting text from ${file.type || 'document'}...`);
       setProgress(60);
       setProcessing(true);
       
-      const text = await extractTextFromPDF(file);
+      const extractionResult = await extractTextFromDocument(file);
+      
+      if (!extractionResult.success) {
+        throw new Error(extractionResult.error || 'Failed to extract text from document');
+      }
+      
+      const text = extractionResult.text;
       setExtractedText(text);
-      updateProcessingStep(extractStepId, 'completed', `Extracted ${text.length} characters from PDF`, {
+      
+      updateProcessingStep(extractStepId, 'completed', 
+        `Extracted ${text.length} characters from ${extractionResult.metadata.fileType}`, {
         textLength: text.length,
         textPreview: text.substring(0, 500) + (text.length > 500 ? '...' : ''),
-        fullText: text
+        fullText: text,
+        fileType: extractionResult.metadata.fileType,
+        metadata: extractionResult.metadata
       });
       
       // Update log with extracted text
@@ -401,10 +385,20 @@ const PDFUploadProcessor = () => {
     const files = e.dataTransfer.files;
     if (files.length > 0) {
       const file = files[0];
-      if (file.type === 'application/pdf') {
+      // Accept multiple file types now
+      const supportedTypes = [
+        'application/pdf',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'text/plain',
+        'text/csv',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/vnd.ms-excel'
+      ];
+      
+      if (supportedTypes.includes(file.type) || file.name.match(/\.(pdf|docx|doc|txt|csv|xlsx|xls)$/i)) {
         handleFileUpload(file);
       } else {
-        toast.error('Please upload a PDF file');
+        toast.error('Please upload a supported file type (PDF, Word, Excel, CSV, TXT)');
       }
     }
   }, []);
@@ -443,7 +437,7 @@ const PDFUploadProcessor = () => {
         </div>
         <div>
           <h2 className="text-2xl font-bold">Medical Document Processor</h2>
-          <p className="text-muted-foreground">Upload PDFs to extract and analyze medical data</p>
+          <p className="text-muted-foreground">Upload documents to extract and analyze medical data</p>
         </div>
       </div>
 
@@ -464,7 +458,7 @@ const PDFUploadProcessor = () => {
                 Upload Medical Document
               </CardTitle>
               <CardDescription>
-                Drag and drop a PDF file or click to select. Supported formats: PDF
+                Drag and drop a document or click to select. Supported formats: PDF, Word, Excel, CSV, TXT
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -501,9 +495,9 @@ const PDFUploadProcessor = () => {
                   ) : (
                     <>
                       <div>
-                        <p className="text-lg font-medium">Drop your PDF here</p>
+                        <p className="text-lg font-medium">Drop your document here</p>
                         <p className="text-sm text-muted-foreground">
-                          Lab reports, imaging studies, medical records
+                          PDFs, Word docs, Excel files, CSV data, text files
                         </p>
                       </div>
                       
@@ -517,7 +511,7 @@ const PDFUploadProcessor = () => {
                       <input
                         id="file-upload"
                         type="file"
-                        accept=".pdf"
+                        accept=".pdf,.docx,.doc,.txt,.csv,.xlsx,.xls"
                         onChange={handleFileSelect}
                         className="hidden"
                         disabled={uploading}
