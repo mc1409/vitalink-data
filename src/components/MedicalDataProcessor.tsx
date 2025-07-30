@@ -13,7 +13,7 @@ interface ProcessingLog {
   id: string;
   timestamp: string;
   step: string;
-  status: 'processing' | 'success' | 'error';
+  status: 'processing' | 'success' | 'error' | 'warning' | 'info';
   message: string;
   data?: any;
 }
@@ -48,7 +48,7 @@ const MedicalDataProcessor: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
-  const addLog = (step: string, status: 'processing' | 'success' | 'error', message: string, data?: any) => {
+  const addLog = (step: string, status: 'processing' | 'success' | 'error' | 'warning' | 'info', message: string, data?: any) => {
     const log: ProcessingLog = {
       id: Date.now().toString(),
       timestamp: new Date().toISOString(),
@@ -126,6 +126,57 @@ const MedicalDataProcessor: React.FC = () => {
     } catch (error: any) {
       addLog('AI Processing', 'error', `AI processing failed: ${error.message}`);
       throw error;
+    }
+  };
+
+  const checkForDuplicates = async (extractedData: ExtractedData, extractedText: string): Promise<{ hasDuplicates: boolean, duplicateDetails: any[] }> => {
+    try {
+      const userId = (await supabase.auth.getUser()).data.user?.id;
+      if (!userId) return { hasDuplicates: false, duplicateDetails: [] };
+
+      const duplicateDetails: any[] = [];
+
+      // Check for duplicate text content in document_processing_logs
+      const textHash = btoa(extractedText.substring(0, 500)); // Use first 500 chars as fingerprint
+      const { data: existingLogs } = await supabase
+        .from('document_processing_logs')
+        .select('*')
+        .eq('user_id', userId)
+        .contains('ai_structured_data', { textHash })
+        .limit(1);
+
+      if (existingLogs && existingLogs.length > 0) {
+        duplicateDetails.push({
+          type: 'document',
+          message: 'Similar document content found',
+          existing: existingLogs[0]
+        });
+      }
+
+      // Check for duplicate lab results based on test name and date
+      for (const [tableName, data] of Object.entries(extractedData)) {
+        if (tableName.startsWith('LAB_RESULTS') && data && data.result_name) {
+          const { data: existingResults } = await supabase
+            .from('lab_results')
+            .select('*')
+            .eq('result_name', data.result_name)
+            .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()) // Last 24 hours
+            .limit(1);
+
+          if (existingResults && existingResults.length > 0) {
+            duplicateDetails.push({
+              type: 'lab_result',
+              message: `Lab result "${data.result_name}" found within last 24 hours`,
+              existing: existingResults[0]
+            });
+          }
+        }
+      }
+
+      return { hasDuplicates: duplicateDetails.length > 0, duplicateDetails };
+    } catch (error) {
+      console.error('Error checking duplicates:', error);
+      return { hasDuplicates: false, duplicateDetails: [] };
     }
   };
 
@@ -245,7 +296,7 @@ const MedicalDataProcessor: React.FC = () => {
     }
   };
 
-  const processDocument = async () => {
+  const processDocument = async (forceOverwrite = false) => {
     if (!file && !textInput.trim()) {
       toast({
         title: "No Input",
@@ -277,19 +328,46 @@ const MedicalDataProcessor: React.FC = () => {
       updateProcessingStep(2, 'Processing with AI to extract medical data...');
       const extractedData = await processWithAI(text);
 
-      // Step 3: Map and save to database
-      updateProcessingStep(3, 'Mapping data to database schema...');
+      // Step 3: Check for duplicates (unless forced)
+      if (!forceOverwrite) {
+        updateProcessingStep(3, 'Checking for duplicate data...');
+        const { hasDuplicates, duplicateDetails } = await checkForDuplicates(extractedData, text);
+        
+        if (hasDuplicates) {
+          const duplicateMessages = duplicateDetails.map(d => d.message).join('\n');
+          const userConfirmed = confirm(
+            `Potential duplicate data detected:\n\n${duplicateMessages}\n\nDo you want to proceed and save this data anyway? This will create new records without overwriting existing ones.`
+          );
+          
+          if (!userConfirmed) {
+            setProcessing(prev => ({
+              ...prev,
+              isProcessing: false,
+              step: 0
+            }));
+            addLog('Duplicate Check', 'warning', 'Processing cancelled due to duplicate data detection');
+            return;
+          }
+          
+          addLog('Duplicate Check', 'info', 'User confirmed to proceed despite duplicates');
+        } else {
+          addLog('Duplicate Check', 'success', 'No duplicates found');
+        }
+      }
+
+      // Step 4: Map and save to database
+      updateProcessingStep(4, 'Mapping data to database schema...');
       const savedRecords = await mapAndSaveToDatabase(extractedData);
 
-      // Step 4: Complete
-      updateProcessingStep(4, 'Processing complete!');
+      // Step 5: Complete
+      updateProcessingStep(5, 'Processing complete!');
       
       setProcessing(prev => ({
         ...prev,
         extractedData,
         savedRecords,
         isProcessing: false,
-        step: 4
+        step: 5
       }));
 
       toast({
@@ -413,17 +491,20 @@ const MedicalDataProcessor: React.FC = () => {
             <Card key={log.id} className={`${
               log.status === 'error' ? 'border-red-200 bg-red-50' :
               log.status === 'success' ? 'border-green-200 bg-green-50' :
+              log.status === 'warning' ? 'border-yellow-200 bg-yellow-50' :
               'border-blue-200 bg-blue-50'
             }`}>
               <CardContent className="p-3">
                 <div className="flex items-start gap-2">
                   {log.status === 'error' ? (
                     <AlertCircle className="h-4 w-4 text-red-600 mt-0.5" />
-                  ) : log.status === 'success' ? (
-                    <CheckCircle className="h-4 w-4 text-green-600 mt-0.5" />
-                  ) : (
-                    <Clock className="h-4 w-4 text-blue-600 mt-0.5" />
-                  )}
+                   ) : log.status === 'success' ? (
+                     <CheckCircle className="h-4 w-4 text-green-600 mt-0.5" />
+                   ) : log.status === 'warning' ? (
+                     <AlertCircle className="h-4 w-4 text-yellow-600 mt-0.5" />
+                   ) : (
+                     <Clock className="h-4 w-4 text-blue-600 mt-0.5" />
+                   )}
                   <div className="flex-1">
                     <div className="flex items-center justify-between">
                       <span className="font-medium text-sm">{log.step}</span>
@@ -514,7 +595,7 @@ const MedicalDataProcessor: React.FC = () => {
           </div>
 
           <Button
-            onClick={processDocument}
+            onClick={() => processDocument()}
             disabled={processing.isProcessing || (!file && !textInput.trim())}
             className="w-full"
             size="lg"
