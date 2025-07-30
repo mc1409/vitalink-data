@@ -13,17 +13,20 @@ serve(async (req) => {
   }
 
   try {
-    const { extractedText, filename } = await req.json();
+    const { text, extractedText, filename } = await req.json();
+    
+    // Accept either 'text' or 'extractedText' parameter
+    const documentText = text || extractedText;
 
     console.log('🤖 AZURE OPENAI REQUEST INITIATED:');
     console.log('=====================================');
     console.log('📄 FILENAME:', filename);
-    console.log('📝 TEXT LENGTH:', extractedText?.length || 0);
-    console.log('📊 TEXT PREVIEW:', extractedText?.substring(0, 500) + '...');
+    console.log('📝 TEXT LENGTH:', documentText?.length || 0);
+    console.log('📊 TEXT PREVIEW:', documentText?.substring(0, 500) + '...');
     console.log('⏰ REQUEST TIMESTAMP:', new Date().toISOString());
 
-    if (!extractedText) {
-      throw new Error('No extracted text provided');
+    if (!documentText) {
+      throw new Error('No text provided for processing');
     }
 
     // Get Azure OpenAI credentials from Supabase secrets
@@ -64,39 +67,62 @@ Return a JSON object with exactly this structure:
   "documentType": "lab_report|imaging_study|cardiovascular_test|medical_record|other",
   "confidence": 0.0-1.0,
   "extractedFields": {
-    "tableName": {
-      "field1": "value1",
-      "field2": "value2"
+    "PATIENTS": {
+      "first_name": "value",
+      "last_name": "value"
+    },
+    "LAB_RESULTS": {
+      "result_name": "Hemoglobin",
+      "numeric_value": 14.5,
+      "units": "g/dL"
+    },
+    "LAB_RESULTS_2": {
+      "result_name": "RBC Count",
+      "numeric_value": 4.8,
+      "units": "million/uL"
+    },
+    "HEART_METRICS": {
+      "measurement_timestamp": "2025-07-26",
+      "resting_heart_rate": 58,
+      "hrv_score": 65
+    },
+    "SLEEP_METRICS": {
+      "sleep_date": "2025-07-26",
+      "total_sleep_time": 8,
+      "deep_sleep_minutes": 72,
+      "sleep_score": 91
     }
   },
   "recommendations": ["suggestion1", "suggestion2"]
 }
 
-EXTRACTION RULES:
-1. Only extract data that exists in the document - do not infer or guess
-2. Match extracted data to the appropriate database table schema
+CRITICAL EXTRACTION RULES:
+1. For multiple lab results, create separate entries: LAB_RESULTS, LAB_RESULTS_2, LAB_RESULTS_3, etc.
+2. Extract numeric values without units - store units separately
 3. For dates, use YYYY-MM-DD format
-4. For numeric values, extract just the number without units
-5. Store units separately in the units field
-6. Use null for missing values
-7. Confidence should reflect how certain you are about the extractions
-8. Multiple tables can be populated from one document
+4. Use null for missing values
+5. For sleep times in hours, convert to total minutes (e.g., 8 hours = 480 minutes)
+6. For heart metrics, extract HRV in milliseconds if available
+7. Match field names exactly to database schema
+8. Patient demographics go in PATIENTS table
+9. Physiological biomarkers map to HEART_METRICS, SLEEP_METRICS, ACTIVITY_METRICS
+10. Blood test results go in LAB_RESULTS (multiple entries for multiple tests)
 
 EXAMPLES OF GOOD EXTRACTIONS:
-- Lab results: Extract test names, values, units, reference ranges, dates
-- Patient info: Names, DOB, contact information, demographics  
-- Imaging: Study type, body part examined, findings, radiologist notes
-- Vitals: Heart rate, blood pressure, temperature measurements
-- Prescriptions: Medication names, dosages, frequencies
+- "Hemoglobin: 14.5 g/dL" → LAB_RESULTS: {"result_name": "Hemoglobin", "numeric_value": 14.5, "units": "g/dL"}
+- "RBC Count: 4.8 million/uL" → LAB_RESULTS_2: {"result_name": "RBC Count", "numeric_value": 4.8, "units": "million/uL"}
+- "Resting Heart Rate: 58 bpm" → HEART_METRICS: {"resting_heart_rate": 58}
+- "Sleep Efficiency: 91%" → SLEEP_METRICS: {"sleep_score": 91}
+- "Deep Sleep: 1.2 hours" → SLEEP_METRICS: {"deep_sleep_minutes": 72}
 
-Be thorough but accurate. Higher confidence scores for clear, unambiguous data.`;
+Be thorough and extract ALL available data points that match the schema.`;
 
     const userPrompt = `Analyze this medical document and extract structured data:
 
 FILENAME: ${filename}
 
 DOCUMENT TEXT:
-${extractedText}
+${documentText}
 
 Extract all relevant medical data that matches the database schema. Focus on:
 - Patient demographics if present
