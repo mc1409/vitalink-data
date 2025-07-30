@@ -629,7 +629,7 @@ export type Database = {
           created_at: string
           id: string
           interpretation: string | null
-          lab_test_id: string
+          lab_test_id: string | null
           numeric_value: number | null
           reference_range_max: number | null
           reference_range_min: number | null
@@ -646,7 +646,7 @@ export type Database = {
           created_at?: string
           id?: string
           interpretation?: string | null
-          lab_test_id: string
+          lab_test_id?: string | null
           numeric_value?: number | null
           reference_range_max?: number | null
           reference_range_min?: number | null
@@ -663,7 +663,7 @@ export type Database = {
           created_at?: string
           id?: string
           interpretation?: string | null
-          lab_test_id?: string
+          lab_test_id?: string | null
           numeric_value?: number | null
           reference_range_max?: number | null
           reference_range_min?: number | null
