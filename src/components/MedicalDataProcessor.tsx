@@ -430,8 +430,20 @@ const MedicalDataProcessor: React.FC = () => {
       updateProcessingStep(1, 'Extracting text from document...');
       let text = textInput.trim();
       
-      if (file) {
-        text = await extractTextFromFile(file);
+      if (file && !text) {
+        // Only call edge function if we have a file and no text input
+        try {
+          text = await extractTextFromFile(file);
+        } catch (error: any) {
+          // If file extraction fails, check if user provided text instead
+          if (!textInput.trim()) {
+            throw new Error(`File processing failed: ${error.message}. Please try pasting the text directly instead.`);
+          }
+          text = textInput.trim();
+          addLog('Text Extraction', 'warning', 'File processing failed, using provided text input instead');
+        }
+      } else if (text) {
+        addLog('Text Extraction', 'success', `Using provided text input (${text.length} characters)`);
       }
 
       // Step 2: Process with AI
