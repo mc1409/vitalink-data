@@ -88,14 +88,14 @@ const Auth = () => {
     setError('');
     setIsLoading(true);
     
-    // First try to sign in
-    const { error: signInError } = await signIn('test@vitalink.com', 'testpassword123');
+    // First try to sign in with a valid test email
+    const { error: signInError } = await signIn('test@example.com', 'testpassword123');
     
     if (signInError) {
       if (signInError.message.includes('Email not confirmed')) {
         // For development - create account without email confirmation
         try {
-          const { error: signUpError } = await signUp('test@vitalink.com', 'testpassword123', 'Test User');
+          const { error: signUpError } = await signUp('test@example.com', 'testpassword123', 'Test User');
           if (signUpError && !signUpError.message.includes('User already registered')) {
             setError('Failed to create test account: ' + signUpError.message);
           } else {
@@ -111,7 +111,7 @@ const Auth = () => {
         }
       } else if (signInError.message.includes('Invalid login credentials')) {
         // Account doesn't exist, create it
-        const { error: signUpError } = await signUp('test@vitalink.com', 'testpassword123', 'Test User');
+        const { error: signUpError } = await signUp('test@example.com', 'testpassword123', 'Test User');
         if (signUpError) {
           setError('Creating test account... (Email confirmation may be required)');
         } else {
