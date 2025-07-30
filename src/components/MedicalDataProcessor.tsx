@@ -840,21 +840,134 @@ const MedicalDataProcessor: React.FC = () => {
           </TabsContent>
 
           <TabsContent value="mapping">
-            <Card>
-              <CardHeader>
-                <CardTitle>Extracted Data Mapping</CardTitle>
-                <CardDescription>
-                  How AI-extracted data maps to database table schemas
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {processing.extractedData ? renderDataMapping() : (
-                  <p className="text-muted-foreground text-center py-8">
-                    No extracted data available yet. Process a document to see the mapping.
-                  </p>
-                )}
-              </CardContent>
-            </Card>
+            <div className="space-y-6">
+              {!processing.extractedData ? (
+                <div className="text-muted-foreground text-center py-8">No data extracted yet</div>
+              ) : (
+                <>
+                  {/* Summary Stats */}
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <Card>
+                      <CardContent className="p-4">
+                        <div className="text-2xl font-bold text-blue-600">
+                          {Object.keys(processing.extractedData).length}
+                        </div>
+                        <div className="text-sm text-muted-foreground">Data Tables</div>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardContent className="p-4">
+                        <div className="text-2xl font-bold text-green-600">
+                          {processing.savedRecords.length}
+                        </div>
+                        <div className="text-sm text-muted-foreground">Records Saved</div>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardContent className="p-4">
+                        <div className="text-2xl font-bold text-orange-600">
+                          {Object.entries(processing.extractedData).filter(([key, data]) => 
+                            key.startsWith('LAB_RESULTS')).length}
+                        </div>
+                        <div className="text-sm text-muted-foreground">Lab Results</div>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardContent className="p-4">
+                        <div className="text-2xl font-bold text-purple-600">
+                          {Object.entries(processing.extractedData).filter(([key, data]) => 
+                            ['HEART_METRICS', 'SLEEP_METRICS', 'ACTIVITY_METRICS'].includes(key)).length}
+                        </div>
+                        <div className="text-sm text-muted-foreground">Health Metrics</div>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Detailed Validation Table */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>📊 Data Validation Report</CardTitle>
+                      <CardDescription>
+                        Complete breakdown of all extracted and processed data
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="overflow-x-auto">
+                        <table className="w-full border-collapse border border-gray-200">
+                          <thead>
+                            <tr className="bg-gray-50">
+                              <th className="border border-gray-200 p-2 text-left">Table</th>
+                              <th className="border border-gray-200 p-2 text-left">Field</th>
+                              <th className="border border-gray-200 p-2 text-left">Extracted Value</th>
+                              <th className="border border-gray-200 p-2 text-left">Type</th>
+                              <th className="border border-gray-200 p-2 text-left">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {Object.entries(processing.extractedData).map(([tableName, data]) => {
+                              if (!data || typeof data !== 'object') return null;
+                              
+                              const savedRecord = processing.savedRecords.find(r => 
+                                r.table.toLowerCase().includes(tableName.toLowerCase().replace('_', '').slice(0, 8))
+                              );
+                              
+                              return Object.entries(data).map(([field, value], index) => (
+                                <tr key={`${tableName}-${field}`} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                  <td className="border border-gray-200 p-2 font-medium">
+                                    {index === 0 ? tableName.replace(/_/g, ' ') : ''}
+                                  </td>
+                                  <td className="border border-gray-200 p-2">{field}</td>
+                                  <td className="border border-gray-200 p-2">
+                                    <span className="max-w-xs inline-block truncate">
+                                      {value === null ? (
+                                        <span className="text-gray-400 italic">null</span>
+                                      ) : (
+                                        String(value)
+                                      )}
+                                    </span>
+                                  </td>
+                                  <td className="border border-gray-200 p-2 text-sm">
+                                    {value === null ? 'null' : typeof value}
+                                  </td>
+                                  <td className="border border-gray-200 p-2">
+                                    {savedRecord ? (
+                                      <span className="inline-flex items-center gap-1 text-green-600 text-sm">
+                                        <CheckCircle className="h-3 w-3" />
+                                        Saved
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex items-center gap-1 text-yellow-600 text-sm">
+                                        <AlertCircle className="h-3 w-3" />
+                                        Pending
+                                      </span>
+                                    )}
+                                  </td>
+                                </tr>
+                              ));
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Raw Data View */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>🔍 Raw Extracted Data</CardTitle>
+                      <CardDescription>
+                        JSON view of all extracted data for technical validation
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <pre className="bg-gray-100 p-4 rounded-lg text-sm overflow-x-auto max-h-96 overflow-y-auto">
+                        {JSON.stringify(processing.extractedData, null, 2)}
+                      </pre>
+                    </CardContent>
+                  </Card>
+                </>
+              )}
+            </div>
           </TabsContent>
 
           <TabsContent value="results">
