@@ -112,6 +112,23 @@ SPECIFIC EXTRACTION RULES:
 - Preserve Units: Keep original units exactly as written in document
 - Biomarker Data: Map physiological data to appropriate metrics tables (heart, sleep, activity, etc.)
 
+CRITICAL ABNORMAL FLAG VALUES:
+For lab results, abnormal_flag must be EXACTLY one of these values (case-sensitive):
+- "normal" (for normal/within range results)
+- "high" (for above reference range)
+- "low" (for below reference range)  
+- "critical_high" (for critically high values)
+- "critical_low" (for critically low values)
+DO NOT use "Normal", "High", "Low", "Critical", "Abnormal" or any other variations.
+
+CRITICAL GENDER VALUES:
+For patients, gender must be EXACTLY one of these values (case-sensitive):
+- "male" (for male patients)
+- "female" (for female patients)
+- "other" (for other/non-binary)
+- "prefer_not_to_say" (if not specified or prefer not to say)
+DO NOT use "M", "F", "Male", "Female", "unknown" or any other variations.
+
 Be thorough and extract ALL available data points that match the schema with high confidence.`;
 
     const userPrompt = `Analyze this medical document and extract structured data according to the medical data extraction protocol:

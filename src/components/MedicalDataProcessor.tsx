@@ -305,7 +305,22 @@ const MedicalDataProcessor: React.FC = () => {
       
       for (const [key, value] of Object.entries(data)) {
         if (validCols.includes(key) && value !== null && value !== undefined) {
-          filtered[key] = value;
+          // Normalize specific fields to match database constraints
+          if (key === 'abnormal_flag') {
+            // Normalize abnormal_flag values to match database constraint
+            const normalizedFlag = normalizeAbnormalFlag(value as string);
+            if (normalizedFlag) {
+              filtered[key] = normalizedFlag;
+            }
+          } else if (key === 'gender') {
+            // Normalize gender values to match database constraint
+            const normalizedGender = normalizeGender(value as string);
+            if (normalizedGender) {
+              filtered[key] = normalizedGender;
+            }
+          } else {
+            filtered[key] = value;
+          }
         } else if (key === 'address' && tableName === 'patients') {
           // Map 'address' to 'address_line1' for patients
           filtered.address_line1 = value;
@@ -313,6 +328,76 @@ const MedicalDataProcessor: React.FC = () => {
       }
       
       return filtered;
+    };
+
+    // Helper function to normalize abnormal_flag values
+    const normalizeAbnormalFlag = (value: string): string | null => {
+      if (!value || typeof value !== 'string') return null;
+      
+      const normalizedValue = value.toLowerCase().trim();
+      
+      // Map common variations to valid database values
+      switch (normalizedValue) {
+        case 'normal':
+        case 'within range':
+        case 'wnl':
+        case 'within normal limits':
+          return 'normal';
+        case 'high':
+        case 'elevated':
+        case 'above range':
+        case 'h':
+          return 'high';
+        case 'low':
+        case 'below range':
+        case 'l':
+          return 'low';
+        case 'critical high':
+        case 'critically high':
+        case 'critical_high':
+        case 'ch':
+          return 'critical_high';
+        case 'critical low':
+        case 'critically low':
+        case 'critical_low':
+        case 'cl':
+          return 'critical_low';
+        default:
+          addLog('Database Mapping', 'warning', `Unknown abnormal_flag value: "${value}", defaulting to 'normal'`);
+          return 'normal'; // Default to normal if unknown
+      }
+    };
+
+    // Helper function to normalize gender values
+    const normalizeGender = (value: string): string | null => {
+      if (!value || typeof value !== 'string') return null;
+      
+      const normalizedValue = value.toLowerCase().trim();
+      
+      // Map common variations to valid database values
+      switch (normalizedValue) {
+        case 'male':
+        case 'm':
+        case 'man':
+          return 'male';
+        case 'female':
+        case 'f':
+        case 'woman':
+          return 'female';
+        case 'other':
+        case 'non-binary':
+        case 'nb':
+          return 'other';
+        case 'prefer_not_to_say':
+        case 'prefer not to say':
+        case 'not specified':
+        case 'unknown':
+        case '':
+          return 'prefer_not_to_say';
+        default:
+          addLog('Database Mapping', 'warning', `Unknown gender value: "${value}", defaulting to 'prefer_not_to_say'`);
+          return 'prefer_not_to_say'; // Default to prefer_not_to_say if unrecognized
+      }
     };
 
     try {
