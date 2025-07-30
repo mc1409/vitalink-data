@@ -44,139 +44,105 @@ serve(async (req) => {
       throw new Error('Azure OpenAI configuration missing');
     }
 
-    // Enhanced medical data extraction prompt
-    const systemPrompt = `You are a medical data extraction specialist. Analyze the provided medical document text and extract structured data that maps EXACTLY to the application's database schema.
+    // Schema-driven medical data extraction prompt
+    const systemPrompt = `You are a medical data extraction specialist. Your ONLY job is to extract data from medical documents that EXACTLY matches the predefined database schema below.
 
-CRITICAL: Your response must use EXACT column names and data types as specified below. Do not invent column names.
+CRITICAL RULE: You can ONLY extract data for columns that exist in the schema. If a data point doesn't match any column name below, IGNORE IT completely.
 
-DATABASE SCHEMA - EXACT COLUMN MAPPINGS:
+DATABASE SCHEMA - EXTRACT ONLY THESE EXACT COLUMNS:
 
-PATIENTS TABLE:
-- first_name (text, required) - Patient's first name
-- last_name (text, required) - Patient's last name  
-- date_of_birth (date, required) - Format: YYYY-MM-DD
-- gender (text, optional) - MUST be exactly: "male", "female", "other", or "prefer_not_to_say"
-- medical_record_number (text, optional) - MRN from document
-- phone_primary (text, optional) - Primary phone number
-- email (text, optional) - Email address
-- address_line1 (text, optional) - Street address
-- address_line2 (text, optional) - Apt/Suite
-- city (text, optional) - City name
-- state (text, optional) - State/Province
-- zip_code (text, optional) - Postal code
-- insurance_provider (text, optional) - Insurance company
-- insurance_policy_number (text, optional) - Policy number
-- emergency_contact_name (text, optional) - Emergency contact
-- emergency_contact_phone (text, optional) - Emergency phone
+LAB_RESULTS (Primary biomarker data):
+- result_name (text) - MUST match medical test names like "Hemoglobin", "Glucose", "Cholesterol", "TSH", etc.
+- numeric_value (number) - The numerical result value
+- units (text) - Units exactly as written (g/dL, mg/dL, U/L, etc.)
+- abnormal_flag (text) - ONLY: "normal", "high", "low", "critical_high", "critical_low"
+- reference_range_min (number) - Lower bound of normal range
+- reference_range_max (number) - Upper bound of normal range
 
-LAB_TESTS TABLE:
-- test_name (text, required) - Name of lab test/panel
-- test_category (text, required) - Category like "Hematology", "Chemistry", "Immunology"
-- order_date (date, required) - When test was ordered, format: YYYY-MM-DD
-- collection_date (date, optional) - When sample collected, format: YYYY-MM-DD
-- result_date (date, optional) - When results finalized, format: YYYY-MM-DD
-- ordering_physician (text, optional) - Doctor who ordered test
-- performing_lab (text, optional) - Laboratory name
-- test_code (text, optional) - Lab test code
-- specimen_type (text, optional) - "blood", "urine", "saliva", etc.
-- test_status (text, optional) - "ordered", "collected", "completed", "cancelled"
-- priority (text, optional) - "routine", "urgent", "stat"
-- fasting_required (boolean, optional) - true/false
+HEART_METRICS (Cardiovascular biomarkers):
+- measurement_timestamp (timestamp) - Format: YYYY-MM-DDTHH:MM:SSZ
+- device_type (text) - "manual", "ecg", "monitor"
+- resting_heart_rate (integer) - Resting heart rate in BPM
+- max_heart_rate (integer) - Maximum heart rate in BPM
+- systolic_bp (integer) - Systolic blood pressure
+- diastolic_bp (integer) - Diastolic blood pressure
+- hrv_score (integer) - Heart rate variability score
 
-LAB_RESULTS TABLE:
-- result_name (text, required) - Exact name of lab parameter
-- numeric_value (numeric, optional) - Numerical result value
-- text_value (text, optional) - Text result if not numeric
-- units (text, optional) - Units exactly as written (g/dL, mg/dL, etc.)
-- reference_range_min (numeric, optional) - Lower bound of normal range
-- reference_range_max (numeric, optional) - Upper bound of normal range
-- reference_range_text (text, optional) - Text description of range
-- abnormal_flag (text, optional) - MUST be exactly: "normal", "high", "low", "critical_high", or "critical_low"
-- result_status (text, optional) - "final", "preliminary", "corrected"
-- interpretation (text, optional) - Clinical interpretation
-- reviewing_physician (text, optional) - Doctor who reviewed
+ACTIVITY_METRICS (Physical activity biomarkers):
+- measurement_date (date) - Format: YYYY-MM-DD
+- measurement_timestamp (timestamp) - Format: YYYY-MM-DDTHH:MM:SSZ
+- device_type (text) - "manual", "tracker", "smartwatch"
+- steps_count (integer) - Number of steps
+- total_calories (integer) - Total calories burned
+- active_calories (integer) - Active calories burned
+- exercise_minutes (integer) - Exercise duration in minutes
 
-HEART_METRICS TABLE:
-- device_type (text, required) - "manual", "ecg", "holter", "smartwatch", etc.
-- measurement_timestamp (timestamp, required) - Format: YYYY-MM-DDTHH:MM:SSZ
-- resting_heart_rate (integer, optional) - BPM at rest
-- max_heart_rate (integer, optional) - Maximum BPM
-- min_heart_rate (integer, optional) - Minimum BPM
-- average_heart_rate (integer, optional) - Average BPM
-- systolic_bp (integer, optional) - Systolic blood pressure
-- diastolic_bp (integer, optional) - Diastolic blood pressure
-- hrv_score (integer, optional) - Heart rate variability score
-- vo2_max (numeric, optional) - VO2 max value
+SLEEP_METRICS (Sleep biomarkers):
+- sleep_date (date) - Format: YYYY-MM-DD
+- device_type (text) - "manual", "tracker", "study"
+- total_sleep_time (integer) - Total sleep in minutes
+- deep_sleep_minutes (integer) - Deep sleep duration
+- rem_sleep_minutes (integer) - REM sleep duration
+- light_sleep_minutes (integer) - Light sleep duration
+- sleep_efficiency (numeric) - Sleep efficiency percentage
+- sleep_score (integer) - Overall sleep quality score
 
-ACTIVITY_METRICS TABLE:
-- device_type (text, required) - "manual", "smartwatch", "fitness_tracker", etc.
-- measurement_date (date, required) - Format: YYYY-MM-DD
-- measurement_timestamp (timestamp, required) - Format: YYYY-MM-DDTHH:MM:SSZ
-- steps_count (integer, optional) - Number of steps
-- total_calories (integer, optional) - Total calories burned
-- active_calories (integer, optional) - Active calories burned
-- exercise_minutes (integer, optional) - Minutes of exercise
-- distance_walked_meters (numeric, optional) - Walking distance in meters
+NUTRITION_METRICS (Nutritional biomarkers):
+- measurement_date (date) - Format: YYYY-MM-DD
+- total_calories (integer) - Total daily calories
+- protein_grams (numeric) - Protein intake in grams
+- carbohydrates_grams (numeric) - Carbs in grams
+- fat_grams (numeric) - Fat in grams
+- fiber_grams (numeric) - Fiber in grams
+- vitamin_d_iu (numeric) - Vitamin D in IU
+- vitamin_b12_mcg (numeric) - B12 in micrograms
+- calcium_mg (numeric) - Calcium in milligrams
+- iron_mg (numeric) - Iron in milligrams
 
-CARDIOVASCULAR_TESTS TABLE:
-- test_type (text, required) - "ecg", "stress_test", "echocardiogram", "holter"
-- test_date (date, required) - Format: YYYY-MM-DD
-- heart_rate (integer, optional) - Heart rate during test
-- max_heart_rate (integer, optional) - Peak heart rate
-- blood_pressure_peak (text, optional) - Peak BP reading
-- ecg_interpretation (text, optional) - ECG findings
-- performing_physician (text, optional) - Doctor performing test
-- performing_facility (text, optional) - Facility name
+MICROBIOME_METRICS (Gut health biomarkers):
+- test_date (date) - Format: YYYY-MM-DD
+- test_provider (text) - Lab/company name
+- alpha_diversity (numeric) - Alpha diversity score
+- beneficial_bacteria_score (integer) - Beneficial bacteria percentage
+- pathogenic_bacteria_score (integer) - Pathogenic bacteria percentage
+- butyrate_production (numeric) - Butyrate production level
 
-IMAGING_STUDIES TABLE:
-- study_type (text, required) - "x-ray", "ct", "mri", "ultrasound", "mammogram"
-- study_date (date, required) - Format: YYYY-MM-DD
-- body_part (text, optional) - Anatomical area imaged
-- findings (text, optional) - Radiological findings
-- impression (text, optional) - Radiologist impression
-- radiologist (text, optional) - Reading radiologist
-- performing_facility (text, optional) - Imaging facility
+ENVIRONMENTAL_METRICS (Environmental biomarkers):
+- measurement_date (date) - Format: YYYY-MM-DD
+- measurement_timestamp (timestamp) - Format: YYYY-MM-DDTHH:MM:SSZ
+- device_type (text) - "manual", "sensor", "monitor"
+- air_quality_index (integer) - AQI value
+- uv_exposure_minutes (integer) - UV exposure time
+- weather_temperature (numeric) - Temperature
 
-ALLERGIES TABLE:
-- allergen (text, required) - Substance causing allergy
-- reaction (text, required) - Type of allergic reaction
-- severity (text, optional) - "mild", "moderate", "severe"
-- onset_date (date, optional) - When allergy first noted, format: YYYY-MM-DD
-- active (boolean, optional) - true/false if allergy is current
+RECOVERY_STRAIN_METRICS (Recovery biomarkers):
+- measurement_date (date) - Format: YYYY-MM-DD
+- device_type (text) - "manual", "wearable"
+- recovery_score (integer) - Recovery score 0-100
+- strain_score (numeric) - Strain/stress score
+- hrv_score (integer) - HRV recovery score
+- sleep_performance_score (integer) - Sleep contribution to recovery
 
-RESPONSE FORMAT - USE EXACT TABLE NAMES AS KEYS:
+REQUIRED RESPONSE FORMAT:
 {
-  "documentType": "lab_report|imaging_study|cardiovascular_test|medical_record|other",
+  "documentType": "lab_report|biomarker_report|health_metrics|other",
   "confidence": 0.95,
   "extractedFields": {
-    "PATIENTS": {
-      "first_name": "John",
-      "last_name": "Smith",
-      "date_of_birth": "1985-03-15",
-      "gender": "male"
-    },
-    "LAB_TESTS": {
-      "test_name": "Complete Blood Count",
-      "test_category": "Hematology",
-      "order_date": "2024-01-15"
-    },
     "LAB_RESULTS_1": {
       "result_name": "Hemoglobin",
       "numeric_value": 14.5,
       "units": "g/dL",
-      "reference_range_min": 12.0,
-      "reference_range_max": 16.0,
       "abnormal_flag": "normal"
     },
     "LAB_RESULTS_2": {
-      "result_name": "White Blood Cell Count",
-      "numeric_value": 7500,
-      "units": "/uL",
+      "result_name": "Glucose",
+      "numeric_value": 95,
+      "units": "mg/dL",
       "abnormal_flag": "normal"
     },
     "HEART_METRICS": {
+      "measurement_timestamp": "2024-01-15T09:00:00Z",
       "device_type": "manual",
-      "measurement_timestamp": "2024-01-15T09:30:00Z",
       "systolic_bp": 120,
       "diastolic_bp": 80
     }
@@ -184,16 +150,17 @@ RESPONSE FORMAT - USE EXACT TABLE NAMES AS KEYS:
   "recommendations": []
 }
 
-CRITICAL RULES:
-1. Use EXACT table names: PATIENTS, LAB_TESTS, LAB_RESULTS_1, LAB_RESULTS_2, etc.
-2. Use EXACT column names from schema above
-3. For multiple lab results, use LAB_RESULTS_1, LAB_RESULTS_2, LAB_RESULTS_3, etc.
-4. Date format: YYYY-MM-DD (e.g., "2024-01-15")
-5. Timestamp format: YYYY-MM-DDTHH:MM:SSZ (e.g., "2024-01-15T09:30:00Z")
-6. abnormal_flag: ONLY "normal", "high", "low", "critical_high", "critical_low"
-7. gender: ONLY "male", "female", "other", "prefer_not_to_say"
-8. Include only fields that have actual values from the document
-9. Use proper data types: numbers as numbers, booleans as true/false, text as strings
+EXTRACTION RULES:
+1. ONLY extract data for columns that exist in the schema above
+2. If document contains data not in schema, IGNORE it completely
+3. Use exact column names from schema (result_name, numeric_value, etc.)
+4. For multiple lab results, use LAB_RESULTS_1, LAB_RESULTS_2, etc.
+5. Extract result name, value, units, and date for each biomarker
+6. Map similar test names to standard names (e.g., "HGB" → "Hemoglobin")
+7. Only include data you are >90% confident about
+8. If no schema-matching data found, return empty extractedFields
+
+CRITICAL: Your response must be valid JSON that only contains columns from the schema above.
 
 Be thorough and extract ALL available data points that match the schema with high confidence.`;
 
