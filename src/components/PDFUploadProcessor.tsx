@@ -128,7 +128,7 @@ const PDFUploadProcessor = () => {
   };
 
   const uploadToStorage = async (file: File): Promise<string> => {
-    const filename = `${Date.now()}-${file.name}`;
+    const filename = `${user?.id}/${Date.now()}-${file.name}`;
     const { data, error } = await supabase.storage
       .from('medical-pdfs')
       .upload(filename, file);
