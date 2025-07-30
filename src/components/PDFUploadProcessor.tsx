@@ -164,9 +164,9 @@ const PDFUploadProcessor = () => {
   const handleFileUpload = async (file: File) => {
     console.log('Upload attempt - User:', user?.email, 'User ID:', user?.id);
     
-    if (!user) {
-      console.log('No user found, blocking upload');
-      toast.error('Please log in to upload files');
+    if (!user?.id) {
+      console.log('No user ID found, blocking upload');
+      toast.error('Authentication required. Please refresh the page and try again.');
       return;
     }
 

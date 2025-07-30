@@ -312,6 +312,57 @@ export type Database = {
         }
         Relationships: []
       }
+      document_processing_logs: {
+        Row: {
+          ai_analysis_status: string
+          ai_structured_data: Json | null
+          confidence_score: number | null
+          created_at: string
+          error_message: string | null
+          extracted_text_preview: string | null
+          file_size: number
+          filename: string
+          id: string
+          processing_status: string
+          storage_path: string | null
+          updated_at: string
+          upload_status: string
+          user_id: string
+        }
+        Insert: {
+          ai_analysis_status?: string
+          ai_structured_data?: Json | null
+          confidence_score?: number | null
+          created_at?: string
+          error_message?: string | null
+          extracted_text_preview?: string | null
+          file_size: number
+          filename: string
+          id?: string
+          processing_status?: string
+          storage_path?: string | null
+          updated_at?: string
+          upload_status?: string
+          user_id: string
+        }
+        Update: {
+          ai_analysis_status?: string
+          ai_structured_data?: Json | null
+          confidence_score?: number | null
+          created_at?: string
+          error_message?: string | null
+          extracted_text_preview?: string | null
+          file_size?: number
+          filename?: string
+          id?: string
+          processing_status?: string
+          storage_path?: string | null
+          updated_at?: string
+          upload_status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       environmental_metrics: {
         Row: {
           air_quality_index: number | null

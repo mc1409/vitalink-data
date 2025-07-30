@@ -7,6 +7,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Database, RefreshCw, Eye, Search, FileText, Activity, Heart, Beaker } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/components/AuthProvider';
 import { toast } from 'sonner';
 
 interface TableInfo {
@@ -22,6 +23,7 @@ interface TableData {
 }
 
 const DatabaseDashboard = () => {
+  const { user } = useAuth();
   const [tables, setTables] = useState<TableInfo[]>([]);
   const [selectedTable, setSelectedTable] = useState<string>('');
   const [tableData, setTableData] = useState<TableData[]>([]);
@@ -47,7 +49,11 @@ const DatabaseDashboard = () => {
   };
 
   const getTableInfo = async () => {
-    console.log('Database refresh - checking tables...');
+    console.log('Database refresh - User:', user?.email, 'checking tables...');
+    if (!user) {
+      toast.error('Please log in to view database');
+      return;
+    }
     setRefreshing(true);
     try {
       const tableInfos: TableInfo[] = [];

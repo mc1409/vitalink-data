@@ -9,10 +9,27 @@ import DatabaseDashboard from '@/components/DatabaseDashboard';
 import PDFUploadProcessor from '@/components/PDFUploadProcessor';
 
 const Dashboard = () => {
-  const { user, signOut } = useAuth();
+  const { user, signOut, loading } = useAuth();
   const [activeTab, setActiveTab] = useState('overview');
   
-  console.log('Dashboard render - User:', user?.email, 'Active tab:', activeTab);
+  console.log('Dashboard render - User:', user?.email, 'Loading:', loading, 'Active tab:', activeTab);
+  
+  // Show loading state while authentication is being determined
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-subtle">
+        <div className="animate-pulse">
+          <Heart className="h-12 w-12 text-primary animate-pulse-glow" />
+        </div>
+      </div>
+    );
+  }
+  
+  // Redirect to auth if not logged in
+  if (!user) {
+    window.location.href = '/auth';
+    return null;
+  }
 
   const handleSignOut = async () => {
     const { error } = await signOut();
