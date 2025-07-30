@@ -107,50 +107,53 @@ serve(async (req) => {
 
 async function extractFromPDF(uint8Array: Uint8Array): Promise<string> {
   try {
-    // Import PDF.js for server-side PDF processing
-    const pdfjsLib = await import('https://esm.sh/pdfjs-dist@4.0.379/build/pdf.min.mjs');
+    // For Edge Functions, we'll use a simpler PDF text extraction approach
+    // First, try to extract text as plain text if it's text-based PDF
+    const textDecoder = new TextDecoder('utf-8', { fatal: false });
+    const rawText = textDecoder.decode(uint8Array);
     
-    // Configure PDF.js worker
-    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://esm.sh/pdfjs-dist@4.0.379/build/pdf.worker.min.mjs';
+    // Simple text extraction from PDF content
+    const textRegex = /\((.*?)\)/g;
+    const streamRegex = /stream\s*(.*?)\s*endstream/gs;
     
-    const pdf = await pdfjsLib.getDocument({ data: uint8Array }).promise;
-    const numPages = pdf.numPages;
-    let fullText = '';
+    let extractedText = '';
     
-    console.log(`PDF has ${numPages} pages`);
-    
-    // Process pages in batches to avoid memory issues
-    const batchSize = 5;
-    for (let i = 1; i <= numPages; i += batchSize) {
-      const endPage = Math.min(i + batchSize - 1, numPages);
-      console.log(`Processing pages ${i}-${endPage}`);
-      
-      const pagePromises = [];
-      for (let pageNum = i; pageNum <= endPage; pageNum++) {
-        pagePromises.push(
-          pdf.getPage(pageNum).then(async (page) => {
-            const textContent = await page.getTextContent();
-            return textContent.items
-              .filter((item: any) => item.str && item.str.trim())
-              .map((item: any) => item.str)
-              .join(' ');
-          })
-        );
-      }
-      
-      const batchTexts = await Promise.all(pagePromises);
-      fullText += batchTexts.join('\n\n') + '\n\n';
-      
-      // Add small delay between batches
-      if (endPage < numPages) {
-        await new Promise(resolve => setTimeout(resolve, 100));
+    // Extract text from PDF objects
+    let match;
+    while ((match = textRegex.exec(rawText)) !== null) {
+      const text = match[1];
+      if (text && text.length > 1 && !text.includes('\\') && !/^[0-9\s\.\-]+$/.test(text)) {
+        extractedText += text + ' ';
       }
     }
     
-    return fullText.trim();
+    // If we didn't find much text, try a different approach
+    if (extractedText.trim().length < 50) {
+      // Look for readable text patterns in the PDF
+      const readableTextRegex = /[A-Za-z][A-Za-z0-9\s\.,;:!?\-]{10,}/g;
+      const matches = rawText.match(readableTextRegex) || [];
+      extractedText = matches.join(' ');
+    }
+    
+    // Clean up the extracted text
+    extractedText = extractedText
+      .replace(/\s+/g, ' ')
+      .replace(/[^\x20-\x7E]/g, ' ')
+      .trim();
+    
+    if (!extractedText || extractedText.length < 10) {
+      // If we still can't extract text, return a placeholder indicating PDF structure was detected
+      console.log('PDF detected but text extraction limited - may be image-based PDF');
+      return 'PDF document detected. This appears to be an image-based PDF or contains complex formatting. Please try converting to text format or use OCR tools for better text extraction.';
+    }
+    
+    console.log(`Extracted ${extractedText.length} characters from PDF`);
+    return extractedText;
+    
   } catch (error) {
     console.error('PDF extraction error:', error);
-    throw new Error(`Failed to extract text from PDF: ${error.message}`);
+    // Fallback: return a message indicating PDF was detected but couldn't be processed
+    return 'PDF document uploaded but text extraction failed. Please try uploading the content as text or in a different format.';
   }
 }
 
