@@ -250,7 +250,7 @@ const PDFUploadProcessor: React.FC = () => {
     }
   }, [updateProcessingStep]);
 
-  // Save to database - Enhanced with detailed logging
+  // Save to database - Enhanced with detailed logging and fixed field mapping
   const saveToDatabase = useCallback(async (logId: string, analysis: ExtractedData, textPreview: string, storagePath?: string) => {
     try {
       updateProcessingStep('save', 'processing', 'Saving results to database...');
@@ -297,81 +297,173 @@ const PDFUploadProcessor: React.FC = () => {
       console.log('👤 USER CONTEXT:', user.id);
       console.log('🏥 PROCESSING MEDICAL DATA TABLES:');
 
+      // Create patient first if patient data exists
+      let patientId = null;
+      const patientData = analysis.extractedFields.PATIENTS || analysis.extractedFields.patients;
+      
+      if (patientData) {
+        console.log('\n👥 CREATING PATIENT RECORD:');
+        console.log('📄 PATIENT DATA:', JSON.stringify(patientData, null, 2));
+        
+        const patientRecord = {
+          user_id: user.id,
+          first_name: patientData.first_name || 'Unknown',
+          last_name: patientData.last_name || 'Patient',
+          date_of_birth: patientData.date_of_birth,
+          gender: patientData.gender,
+          phone_primary: patientData.phone_primary,
+          email: patientData.email,
+          address_line1: patientData.address,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
+
+        console.log('📝 INSERTING PATIENT:', JSON.stringify(patientRecord, null, 2));
+
+        const { data: insertedPatient, error: patientError } = await supabase
+          .from('patients')
+          .insert(patientRecord)
+          .select('id')
+          .single();
+
+        if (patientError) {
+          console.log('❌ PATIENT INSERT ERROR:', JSON.stringify(patientError, null, 2));
+        } else {
+          console.log('✅ PATIENT CREATED SUCCESS:', JSON.stringify(insertedPatient, null, 2));
+          patientId = insertedPatient.id;
+          savedCount++;
+        }
+      }
+
+      // Process each extracted table
       for (const [tableName, tableData] of Object.entries(analysis.extractedFields)) {
-        if (tableData && typeof tableData === 'object') {
-          console.log(`\n📋 PROCESSING TABLE: ${tableName}`);
-          console.log('📊 RAW TABLE DATA:', JSON.stringify(tableData, null, 2));
+        if (tableName === 'PATIENTS' || tableName === 'patients') continue; // Already processed
+
+        console.log(`\n📋 PROCESSING TABLE: ${tableName}`);
+        console.log('📊 RAW TABLE DATA:', JSON.stringify(tableData, null, 2));
+        
+        try {
+          // Map AI field names to database table names and fields
+          const tableMapping: { [key: string]: { dbTable: string, mapFields: (data: any) => any } } = {
+            'LAB_RESULTS': {
+              dbTable: 'lab_results',
+              mapFields: (data: any) => ({
+                lab_test_id: null, // Will need to create lab_test first
+                result_name: data.result_name,
+                numeric_value: data.numeric_value,
+                text_value: data.text_value,
+                units: data.units,
+                reference_range_min: data.reference_range_min,
+                reference_range_max: data.reference_range_max,
+                abnormal_flag: data.abnormal_flag,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              })
+            },
+            'HEART_METRICS': {
+              dbTable: 'heart_metrics',
+              mapFields: (data: any) => ({
+                user_id: user.id,
+                measurement_timestamp: data.measurement_timestamp ? new Date(data.measurement_timestamp).toISOString() : new Date().toISOString(),
+                device_type: 'manual_entry',
+                resting_heart_rate: data.resting_heart_rate,
+                max_heart_rate: data.max_heart_rate,
+                hrv_score: data.hrv_score,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              })
+            },
+            'SLEEP_METRICS': {
+              dbTable: 'sleep_metrics',
+              mapFields: (data: any) => ({
+                user_id: user.id,
+                sleep_date: data.sleep_date || new Date().toISOString().split('T')[0],
+                device_type: 'manual_entry',
+                total_sleep_time: data.total_sleep_time,
+                deep_sleep_minutes: data.deep_sleep_minutes,
+                sleep_score: data.sleep_score,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              })
+            },
+            'ACTIVITY_METRICS': {
+              dbTable: 'activity_metrics',
+              mapFields: (data: any) => ({
+                user_id: user.id,
+                measurement_date: data.measurement_date || new Date().toISOString().split('T')[0],
+                measurement_timestamp: new Date().toISOString(),
+                device_type: 'manual_entry',
+                steps_count: data.steps_count,
+                total_calories: data.total_calories,
+                exercise_minutes: data.exercise_minutes,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              })
+            }
+          };
+
+          // Handle numbered lab results (LAB_RESULTS_2, LAB_RESULTS_3, etc.)
+          const baseTableName = tableName.replace(/_\d+$/, '');
+          const mapping = tableMapping[baseTableName] || tableMapping[tableName];
+
+          if (!mapping) {
+            console.log(`⚠️ NO MAPPING FOUND for table: ${tableName}`);
+            continue;
+          }
+
+          const { dbTable, mapFields } = mapping;
           
-          try {
-            const dataToInsert = Array.isArray(tableData) ? tableData : [tableData];
-            console.log('📦 DATA TO INSERT:', JSON.stringify(dataToInsert, null, 2));
+          if (tableData && typeof tableData === 'object') {
+            const mappedRecord = mapFields(tableData);
             
-            for (let i = 0; i < dataToInsert.length; i++) {
-              const record = dataToInsert[i];
-              if (record && typeof record === 'object') {
-                console.log(`\n🔄 PROCESSING RECORD ${i + 1}/${dataToInsert.length}:`);
-                console.log('📄 ORIGINAL RECORD:', JSON.stringify(record, null, 2));
+            // Special handling for lab results - need to create lab_test first
+            if (dbTable === 'lab_results' && patientId) {
+              console.log('\n🧪 CREATING LAB TEST FIRST:');
+              const labTestRecord = {
+                patient_id: patientId,
+                test_name: tableData.result_name || 'Blood Work',
+                test_category: 'Laboratory',
+                order_date: new Date().toISOString().split('T')[0],
+                test_status: 'completed',
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              };
 
-                // Add user context based on table type
-                if (['patients', 'profiles'].includes(tableName)) {
-                  record.user_id = user.id;
-                  console.log('👤 Added user_id to user-specific table');
-                } else if (['lab_tests', 'lab_results', 'imaging_studies', 'cardiovascular_tests', 'allergies'].includes(tableName)) {
-                  // For medical tables, we need a patient_id - create or find patient first
-                  if (!record.patient_id) {
-                    console.log('🔍 Looking for patient data to create patient_id...');
-                    const patientData = analysis.extractedFields.patients?.[0] || analysis.extractedFields.PATIENTS?.[0];
-                    console.log('👥 FOUND PATIENT DATA:', JSON.stringify(patientData, null, 2));
-                    
-                    if (patientData) {
-                      const patientInsertData = { ...patientData, user_id: user.id };
-                      console.log('📝 UPSERTING PATIENT:');
-                      console.log('Table: patients');
-                      console.log('Data:', JSON.stringify(patientInsertData, null, 2));
-                      console.log('Conflict resolution: user_id,first_name,last_name,date_of_birth');
+              console.log('📝 INSERTING LAB TEST:', JSON.stringify(labTestRecord, null, 2));
 
-                      const { data: patient, error: patientError } = await supabase
-                        .from('patients')
-                        .upsert(patientInsertData, { onConflict: 'user_id,first_name,last_name,date_of_birth' })
-                        .select('id')
-                        .single();
-                      
-                      if (patientError) {
-                        console.log('❌ PATIENT UPSERT ERROR:', JSON.stringify(patientError, null, 2));
-                      } else {
-                        console.log('✅ PATIENT UPSERTED SUCCESS:', JSON.stringify(patient, null, 2));
-                        record.patient_id = patient.id;
-                        console.log('🔗 Added patient_id to medical record:', patient.id);
-                      }
-                    }
-                  }
-                } else if (['activity_metrics', 'heart_metrics', 'sleep_metrics', 'nutrition_metrics'].includes(tableName)) {
-                  record.user_id = user.id;
-                  console.log('👤 Added user_id to metrics table');
-                }
+              const { data: labTest, error: labTestError } = await supabase
+                .from('lab_tests')
+                .insert(labTestRecord)
+                .select('id')
+                .single();
 
-                console.log('📝 FINAL RECORD FOR INSERT:', JSON.stringify(record, null, 2));
-                console.log(`💾 INSERTING INTO TABLE: ${tableName}`);
-
-                const { data: insertResult, error: insertError } = await supabase
-                  .from(tableName as any)
-                  .insert(record)
-                  .select();
-
-                if (insertError) {
-                  console.log(`❌ INSERT ERROR for ${tableName}:`, JSON.stringify(insertError, null, 2));
-                } else {
-                  console.log(`✅ INSERT SUCCESS for ${tableName}:`, JSON.stringify(insertResult, null, 2));
-                  savedCount++;
-                }
+              if (!labTestError && labTest) {
+                mappedRecord.lab_test_id = labTest.id;
+                console.log('✅ LAB TEST CREATED:', labTest.id);
+              } else {
+                console.log('❌ LAB TEST ERROR:', JSON.stringify(labTestError, null, 2));
+                continue;
               }
             }
-          } catch (error) {
-            console.error(`❌ FAILED TO SAVE TO ${tableName}:`, error);
-            console.log('Error details:', JSON.stringify(error, null, 2));
+
+            console.log(`\n📝 INSERTING INTO ${dbTable}:`);
+            console.log('📄 MAPPED RECORD:', JSON.stringify(mappedRecord, null, 2));
+
+            const { data: insertResult, error: insertError } = await supabase
+              .from(dbTable as any)
+              .insert(mappedRecord)
+              .select();
+
+            if (insertError) {
+              console.log(`❌ INSERT ERROR for ${dbTable}:`, JSON.stringify(insertError, null, 2));
+            } else {
+              console.log(`✅ INSERT SUCCESS for ${dbTable}:`, JSON.stringify(insertResult, null, 2));
+              savedCount++;
+            }
           }
-        } else {
-          console.log(`⚠️ SKIPPING ${tableName}: Invalid data format`);
+        } catch (error) {
+          console.error(`❌ FAILED TO SAVE TO ${tableName}:`, error);
+          console.log('Error details:', JSON.stringify(error, null, 2));
         }
       }
 
