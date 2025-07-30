@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import MedicalDataProcessor from '@/components/MedicalDataProcessor';
 import DatabaseDashboard from '@/components/DatabaseDashboard';
+import SimpleTableViewer from '@/components/SimpleTableViewer';
 import { useAuth } from '@/components/AuthProvider';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -273,7 +274,10 @@ const Dashboard = () => {
           </TabsContent>
 
           <TabsContent value="database">
-            <DatabaseDashboard />
+            <div className="space-y-6">
+              <SimpleTableViewer />
+              <DatabaseDashboard />
+            </div>
           </TabsContent>
 
           <TabsContent value="analytics">
