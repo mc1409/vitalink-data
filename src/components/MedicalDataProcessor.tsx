@@ -502,7 +502,7 @@ const MedicalDataProcessor: React.FC = () => {
           if (error) {
             addLog('Database Mapping', 'warning', `Activity metrics failed: ${error.message}`);
           } else {
-            savedRecords.push({ table: 'activity_metrics', data: result });
+            savedRecords.push({ table: 'activity_metrics', data: result, confidence: 0.90 });
             addLog('Database Mapping', 'success', 'Activity metrics saved successfully', result);
           }
         } catch (error: any) {
@@ -510,12 +510,281 @@ const MedicalDataProcessor: React.FC = () => {
         }
       }
 
-      addLog('Database Mapping', 'success', `Processing complete! ${savedRecords.length} records saved across ${new Set(savedRecords.map(r => r.table)).size} tables`);
+      // Step 6: Process cardiovascular tests
+      if (extractedData.CARDIOVASCULAR_TESTS) {
+        addLog('Database Mapping', 'processing', 'Processing cardiovascular tests...');
+        
+        try {
+          const cardiovascularData = filterValidFields(extractedData.CARDIOVASCULAR_TESTS, 'cardiovascular_tests');
+          if (patientId) {
+            cardiovascularData.patient_id = patientId;
+          }
+          cardiovascularData.test_date = cardiovascularData.test_date || new Date().toISOString().split('T')[0];
+
+          const { data: result, error } = await supabase
+            .from('cardiovascular_tests')
+            .insert(cardiovascularData)
+            .select()
+            .single();
+
+          if (error) {
+            addLog('Database Mapping', 'warning', `Cardiovascular test failed: ${error.message}`);
+          } else {
+            savedRecords.push({ table: 'cardiovascular_tests', data: result, confidence: 0.92 });
+            addLog('Database Mapping', 'success', 'Cardiovascular test saved successfully', result);
+          }
+        } catch (error: any) {
+          addLog('Database Mapping', 'warning', `Cardiovascular test processing failed: ${error.message}`);
+        }
+      }
+
+      // Step 7: Process imaging studies
+      if (extractedData.IMAGING_STUDIES) {
+        addLog('Database Mapping', 'processing', 'Processing imaging studies...');
+        
+        try {
+          const imagingData = filterValidFields(extractedData.IMAGING_STUDIES, 'imaging_studies');
+          if (patientId) {
+            imagingData.patient_id = patientId;
+          }
+          imagingData.study_date = imagingData.study_date || new Date().toISOString().split('T')[0];
+
+          const { data: result, error } = await supabase
+            .from('imaging_studies')
+            .insert(imagingData)
+            .select()
+            .single();
+
+          if (error) {
+            addLog('Database Mapping', 'warning', `Imaging study failed: ${error.message}`);
+          } else {
+            savedRecords.push({ table: 'imaging_studies', data: result, confidence: 0.93 });
+            addLog('Database Mapping', 'success', 'Imaging study saved successfully', result);
+          }
+        } catch (error: any) {
+          addLog('Database Mapping', 'warning', `Imaging study processing failed: ${error.message}`);
+        }
+      }
+
+      // Step 8: Process allergies
+      if (extractedData.ALLERGIES) {
+        addLog('Database Mapping', 'processing', 'Processing allergies...');
+        
+        try {
+          const allergyData = filterValidFields(extractedData.ALLERGIES, 'allergies');
+          if (patientId) {
+            allergyData.patient_id = patientId;
+          }
+          allergyData.active = allergyData.active !== undefined ? allergyData.active : true;
+
+          const { data: result, error } = await supabase
+            .from('allergies')
+            .insert(allergyData)
+            .select()
+            .single();
+
+          if (error) {
+            addLog('Database Mapping', 'warning', `Allergy record failed: ${error.message}`);
+          } else {
+            savedRecords.push({ table: 'allergies', data: result, confidence: 0.94 });
+            addLog('Database Mapping', 'success', 'Allergy record saved successfully', result);
+          }
+        } catch (error: any) {
+          addLog('Database Mapping', 'warning', `Allergy processing failed: ${error.message}`);
+        }
+      }
+
+      // Step 9: Process nutrition metrics
+      if (extractedData.NUTRITION_METRICS) {
+        addLog('Database Mapping', 'processing', 'Processing nutrition metrics...');
+        
+        try {
+          const nutritionData = filterValidFields(extractedData.NUTRITION_METRICS, 'nutrition_metrics');
+          nutritionData.user_id = (await supabase.auth.getUser()).data.user?.id;
+          nutritionData.measurement_date = nutritionData.measurement_date || new Date().toISOString().split('T')[0];
+
+          const { data: result, error } = await supabase
+            .from('nutrition_metrics')
+            .insert(nutritionData)
+            .select()
+            .single();
+
+          if (error) {
+            addLog('Database Mapping', 'warning', `Nutrition metrics failed: ${error.message}`);
+          } else {
+            savedRecords.push({ table: 'nutrition_metrics', data: result, confidence: 0.88 });
+            addLog('Database Mapping', 'success', 'Nutrition metrics saved successfully', result);
+          }
+        } catch (error: any) {
+          addLog('Database Mapping', 'warning', `Nutrition metrics processing failed: ${error.message}`);
+        }
+      }
+
+      // Step 10: Process microbiome metrics
+      if (extractedData.MICROBIOME_METRICS) {
+        addLog('Database Mapping', 'processing', 'Processing microbiome metrics...');
+        
+        try {
+          const microbiomeData = filterValidFields(extractedData.MICROBIOME_METRICS, 'microbiome_metrics');
+          microbiomeData.user_id = (await supabase.auth.getUser()).data.user?.id;
+          microbiomeData.test_date = microbiomeData.test_date || new Date().toISOString().split('T')[0];
+          microbiomeData.test_provider = microbiomeData.test_provider || 'Unknown';
+
+          const { data: result, error } = await supabase
+            .from('microbiome_metrics')
+            .insert(microbiomeData)
+            .select()
+            .single();
+
+          if (error) {
+            addLog('Database Mapping', 'warning', `Microbiome metrics failed: ${error.message}`);
+          } else {
+            savedRecords.push({ table: 'microbiome_metrics', data: result, confidence: 0.85 });
+            addLog('Database Mapping', 'success', 'Microbiome metrics saved successfully', result);
+          }
+        } catch (error: any) {
+          addLog('Database Mapping', 'warning', `Microbiome metrics processing failed: ${error.message}`);
+        }
+      }
+
+      // Step 11: Process environmental metrics
+      if (extractedData.ENVIRONMENTAL_METRICS) {
+        addLog('Database Mapping', 'processing', 'Processing environmental metrics...');
+        
+        try {
+          const environmentalData = filterValidFields(extractedData.ENVIRONMENTAL_METRICS, 'environmental_metrics');
+          environmentalData.user_id = (await supabase.auth.getUser()).data.user?.id;
+          environmentalData.device_type = 'manual_entry';
+          environmentalData.measurement_date = environmentalData.measurement_date || new Date().toISOString().split('T')[0];
+          environmentalData.measurement_timestamp = environmentalData.measurement_timestamp || new Date().toISOString();
+
+          const { data: result, error } = await supabase
+            .from('environmental_metrics')
+            .insert(environmentalData)
+            .select()
+            .single();
+
+          if (error) {
+            addLog('Database Mapping', 'warning', `Environmental metrics failed: ${error.message}`);
+          } else {
+            savedRecords.push({ table: 'environmental_metrics', data: result, confidence: 0.87 });
+            addLog('Database Mapping', 'success', 'Environmental metrics saved successfully', result);
+          }
+        } catch (error: any) {
+          addLog('Database Mapping', 'warning', `Environmental metrics processing failed: ${error.message}`);
+        }
+      }
+
+      // Step 12: Process recovery strain metrics
+      if (extractedData.RECOVERY_STRAIN_METRICS) {
+        addLog('Database Mapping', 'processing', 'Processing recovery strain metrics...');
+        
+        try {
+          const recoveryData = filterValidFields(extractedData.RECOVERY_STRAIN_METRICS, 'recovery_strain_metrics');
+          recoveryData.user_id = (await supabase.auth.getUser()).data.user?.id;
+          recoveryData.device_type = 'manual_entry';
+          recoveryData.measurement_date = recoveryData.measurement_date || new Date().toISOString().split('T')[0];
+
+          const { data: result, error } = await supabase
+            .from('recovery_strain_metrics')
+            .insert(recoveryData)
+            .select()
+            .single();
+
+          if (error) {
+            addLog('Database Mapping', 'warning', `Recovery strain metrics failed: ${error.message}`);
+          } else {
+            savedRecords.push({ table: 'recovery_strain_metrics', data: result, confidence: 0.89 });
+            addLog('Database Mapping', 'success', 'Recovery strain metrics saved successfully', result);
+          }
+        } catch (error: any) {
+          addLog('Database Mapping', 'warning', `Recovery strain metrics processing failed: ${error.message}`);
+        }
+      }
+
+      // Summary logging
+      addLog('Database Mapping', 'success', `Database mapping completed. Saved ${savedRecords.length} records across ${new Set(savedRecords.map(r => r.table)).size} tables.`, {
+        totalRecords: savedRecords.length,
+        tablesSaved: [...new Set(savedRecords.map(r => r.table))],
+        averageConfidence: savedRecords.length > 0 ? 
+          (savedRecords.reduce((sum, r) => sum + (r.confidence || 0.5), 0) / savedRecords.length).toFixed(2) : 0
+      });
+
       return savedRecords;
+    } catch (error: any) {
+      addLog('Database Mapping', 'error', `Database mapping failed: ${error.message}`, { error: error.toString() });
+      throw error;
+    }
+  };
+
+  // Enhanced processing function that combines everything
+  const processDocumentWithDatabase = async (text: string, filename: string): Promise<void> => {
+    try {
+      setProcessing(prev => ({ ...prev, 
+        status: 'processing', 
+        currentStep: 'AI Processing',
+        progress: 50 
+      }));
+
+      // Step 1: Process with AI (store filename in processing state for AI to use)
+      setProcessing(prev => ({ ...prev, filename }));
+      const aiResult = await processWithAI(text);
+      
+      setProcessing(prev => ({ ...prev, 
+        currentStep: 'Database Mapping',
+        progress: 75 
+      }));
+
+      // Step 2: Check for duplicates
+      const duplicateCheck = await checkForDuplicates(aiResult.extractedFields, text);
+      
+      if (duplicateCheck.hasDuplicates) {
+        addLog('Duplicate Check', 'warning', `Found ${duplicateCheck.duplicateDetails.length} potential duplicates`, duplicateCheck.duplicateDetails);
+      }
+
+      // Step 3: Save to database
+      const savedRecords = await mapAndSaveToDatabase(aiResult.extractedFields);
+      
+      setProcessing(prev => ({ ...prev, 
+        status: 'completed',
+        currentStep: 'Complete',
+        progress: 100,
+        savedRecords,
+        documentType: aiResult.documentType,
+        confidence: aiResult.confidence,
+        extractedFields: aiResult.extractedFields,
+        recommendations: aiResult.recommendations,
+        uncertainData: aiResult.uncertainData,
+        patientData: aiResult.patientData
+      }));
+
+      addLog('Processing', 'success', `Document processing completed successfully! ${savedRecords.length} records saved.`, {
+        documentType: aiResult.documentType,
+        confidence: aiResult.confidence,
+        recordsSaved: savedRecords.length,
+        tablesAffected: [...new Set(savedRecords.map(r => r.table))]
+      });
+
+      toast({
+        title: "Processing Complete",
+        description: `Successfully processed ${filename} and saved ${savedRecords.length} records to the database.`,
+      });
 
     } catch (error: any) {
-      addLog('Database Mapping', 'error', `Database processing failed: ${error.message}`);
-      throw error;
+      console.error('Document processing error:', error);
+      setProcessing(prev => ({ ...prev, 
+        status: 'error',
+        currentStep: 'Error',
+        error: error.message 
+      }));
+      
+      addLog('Processing', 'error', `Document processing failed: ${error.message}`, { error: error.toString() });
+      
+      toast({
+        title: "Processing Failed",
+        description: error.message,
+        variant: "destructive",
+      });
     }
   };
 
