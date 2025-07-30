@@ -15,6 +15,13 @@ serve(async (req) => {
   try {
     const { extractedText, filename } = await req.json();
 
+    console.log('🤖 AZURE OPENAI REQUEST INITIATED:');
+    console.log('=====================================');
+    console.log('📄 FILENAME:', filename);
+    console.log('📝 TEXT LENGTH:', extractedText?.length || 0);
+    console.log('📊 TEXT PREVIEW:', extractedText?.substring(0, 500) + '...');
+    console.log('⏰ REQUEST TIMESTAMP:', new Date().toISOString());
+
     if (!extractedText) {
       throw new Error('No extracted text provided');
     }
@@ -24,12 +31,15 @@ serve(async (req) => {
     const azureApiKey = Deno.env.get('AZURE_OPENAI_API_KEY');
     const azureDeployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
 
+    console.log('🔑 AZURE CREDENTIALS CHECK:');
+    console.log('=====================================');
+    console.log('🌐 ENDPOINT:', azureEndpoint ? '✅ Set' : '❌ Missing');
+    console.log('🔐 API KEY:', azureApiKey ? '✅ Set' : '❌ Missing');
+    console.log('🚀 DEPLOYMENT:', azureDeployment ? '✅ Set' : '❌ Missing');
+
     if (!azureEndpoint || !azureApiKey || !azureDeployment) {
       throw new Error('Azure OpenAI configuration missing');
     }
-
-    console.log('Processing document:', filename);
-    console.log('Text length:', extractedText.length);
 
     // Create comprehensive medical document analysis prompt
     const systemPrompt = `You are a medical document analysis AI that extracts structured data from medical documents. 
@@ -99,6 +109,17 @@ Extract all relevant medical data that matches the database schema. Focus on:
 
 Return the structured JSON response as specified.`;
 
+    console.log('📤 SENDING REQUEST TO AZURE OPENAI:');
+    console.log('=====================================');
+    console.log('🌐 ENDPOINT URL:', `${azureEndpoint}/openai/deployments/${azureDeployment}/chat/completions?api-version=2024-02-01`);
+    console.log('🤖 MODEL DEPLOYMENT:', azureDeployment);
+    console.log('📊 SYSTEM PROMPT LENGTH:', systemPrompt.length);
+    console.log('📝 USER PROMPT LENGTH:', userPrompt.length);
+    console.log('🎯 MAX TOKENS:', 4000);
+    console.log('🌡️ TEMPERATURE:', 0.1);
+    console.log('📋 RESPONSE FORMAT:', 'json_object');
+    console.log('⏰ REQUEST SENT AT:', new Date().toISOString());
+
     // Call Azure OpenAI API
     const response = await fetch(`${azureEndpoint}/openai/deployments/${azureDeployment}/chat/completions?api-version=2024-02-01`, {
       method: 'POST',
@@ -118,24 +139,41 @@ Return the structured JSON response as specified.`;
       }),
     });
 
+    console.log('📥 AZURE OPENAI RESPONSE RECEIVED:');
+    console.log('=====================================');
+    console.log('✅ RESPONSE STATUS:', response.status);
+    console.log('📊 RESPONSE OK:', response.ok);
+    console.log('⏰ RESPONSE RECEIVED AT:', new Date().toISOString());
+
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Azure OpenAI API error:', errorText);
+      console.error('❌ AZURE OPENAI API ERROR:');
+      console.error('Status:', response.status);
+      console.error('Status Text:', response.statusText);
+      console.error('Error Body:', errorText);
       throw new Error(`Azure OpenAI API error: ${response.status} ${response.statusText}`);
     }
 
     const data = await response.json();
-    console.log('Azure OpenAI response received');
+    console.log('📄 RAW AZURE RESPONSE:', JSON.stringify(data, null, 2));
 
     if (!data.choices?.[0]?.message?.content) {
+      console.error('❌ NO CONTENT IN AZURE RESPONSE:', JSON.stringify(data, null, 2));
       throw new Error('No content in Azure OpenAI response');
     }
 
+    const rawContent = data.choices[0].message.content;
+    console.log('📝 RAW AI RESPONSE CONTENT:');
+    console.log('=====================================');
+    console.log(rawContent);
+
     let parsedResult;
     try {
-      parsedResult = JSON.parse(data.choices[0].message.content);
+      parsedResult = JSON.parse(rawContent);
+      console.log('✅ PARSED AI RESPONSE:', JSON.stringify(parsedResult, null, 2));
     } catch (parseError) {
-      console.error('Failed to parse AI response:', data.choices[0].message.content);
+      console.error('❌ FAILED TO PARSE AI RESPONSE:', rawContent);
+      console.error('Parse Error:', parseError);
       throw new Error('Failed to parse AI response as JSON');
     }
 
@@ -149,7 +187,14 @@ Return the structured JSON response as specified.`;
         : []
     };
 
-    console.log('Analysis complete. Document type:', result.documentType, 'Confidence:', result.confidence);
+    console.log('🎯 FINAL PROCESSED RESULT:');
+    console.log('=====================================');
+    console.log('📋 Document Type:', result.documentType);
+    console.log('🎯 Confidence:', result.confidence);
+    console.log('📊 Extracted Fields Count:', Object.keys(result.extractedFields).length);
+    console.log('💡 Recommendations Count:', result.recommendations.length);
+    console.log('📄 Full Result:', JSON.stringify(result, null, 2));
+    console.log('⏰ PROCESSING COMPLETED:', new Date().toISOString());
 
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

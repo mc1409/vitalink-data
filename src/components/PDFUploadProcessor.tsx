@@ -195,14 +195,35 @@ const PDFUploadProcessor: React.FC = () => {
     }
   }, [updateProcessingStep]);
 
-  // Process with AI
+  // Process with AI - Enhanced with detailed logging
   const processWithAI = useCallback(async (text: string, filename: string): Promise<ExtractedData> => {
     try {
-      updateProcessingStep('ai', 'processing', 'Analyzing text with AI...');
+      updateProcessingStep('ai', 'processing', 'Preparing AI analysis request...');
+
+      // Log the exact prompt being sent
+      const requestPayload = { extractedText: text, filename };
+      console.log('🤖 AI ANALYSIS REQUEST DETAILS:');
+      console.log('=====================================');
+      console.log('📤 REQUEST PAYLOAD:', JSON.stringify(requestPayload, null, 2));
+      console.log('📝 TEXT LENGTH:', text.length);
+      console.log('📄 FILENAME:', filename);
+      console.log('🔗 SUPABASE FUNCTION:', 'process-medical-document');
+      console.log('⏰ REQUEST TIMESTAMP:', new Date().toISOString());
+      
+      updateProcessingStep('ai', 'processing', `Sending ${text.length} characters to Azure OpenAI...`);
 
       const { data, error } = await supabase.functions.invoke('process-medical-document', {
-        body: { extractedText: text, filename }
+        body: requestPayload
       });
+
+      console.log('📥 AI ANALYSIS RESPONSE DETAILS:');
+      console.log('=====================================');
+      console.log('✅ RESPONSE SUCCESS:', !error);
+      console.log('📊 RESPONSE DATA:', JSON.stringify(data, null, 2));
+      if (error) {
+        console.log('❌ RESPONSE ERROR:', JSON.stringify(error, null, 2));
+      }
+      console.log('⏰ RESPONSE TIMESTAMP:', new Date().toISOString());
 
       if (error) {
         console.error('AI processing error:', error);
@@ -213,89 +234,157 @@ const PDFUploadProcessor: React.FC = () => {
         throw new Error(data?.error || 'AI analysis failed');
       }
 
+      console.log('🎯 EXTRACTED FIELDS SUMMARY:');
+      console.log('=====================================');
+      Object.entries(data.extractedFields || {}).forEach(([table, fields]) => {
+        console.log(`📋 TABLE: ${table}`);
+        console.log(`📊 DATA:`, JSON.stringify(fields, null, 2));
+      });
+
       updateProcessingStep('ai', 'completed', `Analysis complete with ${Math.round(data.confidence * 100)}% confidence`);
       return data;
     } catch (error: any) {
-      console.error('AI processing failed:', error);
+      console.error('❌ AI PROCESSING FAILED:', error);
       updateProcessingStep('ai', 'error', error.message);
       throw error;
     }
   }, [updateProcessingStep]);
 
-  // Save to database - both processing log AND medical tables
+  // Save to database - Enhanced with detailed logging
   const saveToDatabase = useCallback(async (logId: string, analysis: ExtractedData, textPreview: string, storagePath?: string) => {
     try {
       updateProcessingStep('save', 'processing', 'Saving results to database...');
 
+      console.log('💾 DATABASE SAVE OPERATION STARTED:');
+      console.log('=====================================');
+      console.log('🔑 LOG ID:', logId);
+      console.log('📊 ANALYSIS DATA:', JSON.stringify(analysis, null, 2));
+      console.log('📝 TEXT PREVIEW LENGTH:', textPreview.length);
+      console.log('🗂️ STORAGE PATH:', storagePath);
+      console.log('⏰ SAVE TIMESTAMP:', new Date().toISOString());
+
       // First, update the processing log
+      const logUpdateQuery = {
+        processing_status: 'completed',
+        ai_analysis_status: 'completed',
+        ai_structured_data: analysis.extractedFields,
+        confidence_score: analysis.confidence,
+        extracted_text_preview: textPreview,
+        ...(storagePath && { storage_path: storagePath })
+      };
+
+      console.log('📝 UPDATING PROCESSING LOG:');
+      console.log('Query:', JSON.stringify(logUpdateQuery, null, 2));
+      console.log('Table: document_processing_logs');
+      console.log('WHERE id =', logId);
+
       const { error: logError } = await supabase
         .from('document_processing_logs')
-        .update({
-          processing_status: 'completed',
-          ai_analysis_status: 'completed',
-          ai_structured_data: analysis.extractedFields,
-          confidence_score: analysis.confidence,
-          extracted_text_preview: textPreview,
-          ...(storagePath && { storage_path: storagePath })
-        })
+        .update(logUpdateQuery)
         .eq('id', logId);
 
-      if (logError) throw logError;
+      if (logError) {
+        console.log('❌ PROCESSING LOG UPDATE ERROR:', JSON.stringify(logError, null, 2));
+        throw logError;
+      }
+      console.log('✅ PROCESSING LOG UPDATED SUCCESSFULLY');
 
       // Now save extracted medical data to appropriate tables
       let savedCount = 0;
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not authenticated');
 
+      console.log('👤 USER CONTEXT:', user.id);
+      console.log('🏥 PROCESSING MEDICAL DATA TABLES:');
+
       for (const [tableName, tableData] of Object.entries(analysis.extractedFields)) {
         if (tableData && typeof tableData === 'object') {
+          console.log(`\n📋 PROCESSING TABLE: ${tableName}`);
+          console.log('📊 RAW TABLE DATA:', JSON.stringify(tableData, null, 2));
+          
           try {
-            // Add user_id for user-specific tables, patient_id for patient-related tables
             const dataToInsert = Array.isArray(tableData) ? tableData : [tableData];
+            console.log('📦 DATA TO INSERT:', JSON.stringify(dataToInsert, null, 2));
             
-            for (const record of dataToInsert) {
+            for (let i = 0; i < dataToInsert.length; i++) {
+              const record = dataToInsert[i];
               if (record && typeof record === 'object') {
+                console.log(`\n🔄 PROCESSING RECORD ${i + 1}/${dataToInsert.length}:`);
+                console.log('📄 ORIGINAL RECORD:', JSON.stringify(record, null, 2));
+
                 // Add user context based on table type
                 if (['patients', 'profiles'].includes(tableName)) {
                   record.user_id = user.id;
+                  console.log('👤 Added user_id to user-specific table');
                 } else if (['lab_tests', 'lab_results', 'imaging_studies', 'cardiovascular_tests', 'allergies'].includes(tableName)) {
                   // For medical tables, we need a patient_id - create or find patient first
                   if (!record.patient_id) {
+                    console.log('🔍 Looking for patient data to create patient_id...');
                     const patientData = analysis.extractedFields.patients?.[0] || analysis.extractedFields.PATIENTS?.[0];
+                    console.log('👥 FOUND PATIENT DATA:', JSON.stringify(patientData, null, 2));
+                    
                     if (patientData) {
+                      const patientInsertData = { ...patientData, user_id: user.id };
+                      console.log('📝 UPSERTING PATIENT:');
+                      console.log('Table: patients');
+                      console.log('Data:', JSON.stringify(patientInsertData, null, 2));
+                      console.log('Conflict resolution: user_id,first_name,last_name,date_of_birth');
+
                       const { data: patient, error: patientError } = await supabase
                         .from('patients')
-                        .upsert({ ...patientData, user_id: user.id }, { onConflict: 'user_id,first_name,last_name,date_of_birth' })
+                        .upsert(patientInsertData, { onConflict: 'user_id,first_name,last_name,date_of_birth' })
                         .select('id')
                         .single();
                       
-                      if (!patientError && patient) {
+                      if (patientError) {
+                        console.log('❌ PATIENT UPSERT ERROR:', JSON.stringify(patientError, null, 2));
+                      } else {
+                        console.log('✅ PATIENT UPSERTED SUCCESS:', JSON.stringify(patient, null, 2));
                         record.patient_id = patient.id;
+                        console.log('🔗 Added patient_id to medical record:', patient.id);
                       }
                     }
                   }
                 } else if (['activity_metrics', 'heart_metrics', 'sleep_metrics', 'nutrition_metrics'].includes(tableName)) {
                   record.user_id = user.id;
+                  console.log('👤 Added user_id to metrics table');
                 }
 
-                const { error: insertError } = await supabase
-                  .from(tableName as any)
-                  .insert(record);
+                console.log('📝 FINAL RECORD FOR INSERT:', JSON.stringify(record, null, 2));
+                console.log(`💾 INSERTING INTO TABLE: ${tableName}`);
 
-                if (!insertError) {
+                const { data: insertResult, error: insertError } = await supabase
+                  .from(tableName as any)
+                  .insert(record)
+                  .select();
+
+                if (insertError) {
+                  console.log(`❌ INSERT ERROR for ${tableName}:`, JSON.stringify(insertError, null, 2));
+                } else {
+                  console.log(`✅ INSERT SUCCESS for ${tableName}:`, JSON.stringify(insertResult, null, 2));
                   savedCount++;
                 }
               }
             }
           } catch (error) {
-            console.error(`Failed to save to ${tableName}:`, error);
+            console.error(`❌ FAILED TO SAVE TO ${tableName}:`, error);
+            console.log('Error details:', JSON.stringify(error, null, 2));
           }
+        } else {
+          console.log(`⚠️ SKIPPING ${tableName}: Invalid data format`);
         }
       }
 
+      console.log('\n📊 DATABASE SAVE SUMMARY:');
+      console.log('=====================================');
+      console.log('✅ RECORDS SUCCESSFULLY SAVED:', savedCount);
+      console.log('📋 TABLES PROCESSED:', Object.keys(analysis.extractedFields).length);
+      console.log('⏰ SAVE COMPLETED:', new Date().toISOString());
+
       updateProcessingStep('save', 'completed', `Results saved successfully. ${savedCount} medical records created.`);
     } catch (error: any) {
-      console.error('Database save failed:', error);
+      console.error('❌ DATABASE SAVE FAILED:', error);
+      console.log('Error details:', JSON.stringify(error, null, 2));
       updateProcessingStep('save', 'error', 'Failed to save results');
       throw error;
     }
