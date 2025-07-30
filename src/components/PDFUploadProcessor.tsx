@@ -222,12 +222,13 @@ const PDFUploadProcessor: React.FC = () => {
     }
   }, [updateProcessingStep]);
 
-  // Save to database
+  // Save to database - both processing log AND medical tables
   const saveToDatabase = useCallback(async (logId: string, analysis: ExtractedData, textPreview: string, storagePath?: string) => {
     try {
       updateProcessingStep('save', 'processing', 'Saving results to database...');
 
-      const { error } = await supabase
+      // First, update the processing log
+      const { error: logError } = await supabase
         .from('document_processing_logs')
         .update({
           processing_status: 'completed',
@@ -239,9 +240,60 @@ const PDFUploadProcessor: React.FC = () => {
         })
         .eq('id', logId);
 
-      if (error) throw error;
+      if (logError) throw logError;
 
-      updateProcessingStep('save', 'completed', 'Results saved successfully');
+      // Now save extracted medical data to appropriate tables
+      let savedCount = 0;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
+      for (const [tableName, tableData] of Object.entries(analysis.extractedFields)) {
+        if (tableData && typeof tableData === 'object') {
+          try {
+            // Add user_id for user-specific tables, patient_id for patient-related tables
+            const dataToInsert = Array.isArray(tableData) ? tableData : [tableData];
+            
+            for (const record of dataToInsert) {
+              if (record && typeof record === 'object') {
+                // Add user context based on table type
+                if (['patients', 'profiles'].includes(tableName)) {
+                  record.user_id = user.id;
+                } else if (['lab_tests', 'lab_results', 'imaging_studies', 'cardiovascular_tests', 'allergies'].includes(tableName)) {
+                  // For medical tables, we need a patient_id - create or find patient first
+                  if (!record.patient_id) {
+                    const patientData = analysis.extractedFields.patients?.[0] || analysis.extractedFields.PATIENTS?.[0];
+                    if (patientData) {
+                      const { data: patient, error: patientError } = await supabase
+                        .from('patients')
+                        .upsert({ ...patientData, user_id: user.id }, { onConflict: 'user_id,first_name,last_name,date_of_birth' })
+                        .select('id')
+                        .single();
+                      
+                      if (!patientError && patient) {
+                        record.patient_id = patient.id;
+                      }
+                    }
+                  }
+                } else if (['activity_metrics', 'heart_metrics', 'sleep_metrics', 'nutrition_metrics'].includes(tableName)) {
+                  record.user_id = user.id;
+                }
+
+                const { error: insertError } = await supabase
+                  .from(tableName as any)
+                  .insert(record);
+
+                if (!insertError) {
+                  savedCount++;
+                }
+              }
+            }
+          } catch (error) {
+            console.error(`Failed to save to ${tableName}:`, error);
+          }
+        }
+      }
+
+      updateProcessingStep('save', 'completed', `Results saved successfully. ${savedCount} medical records created.`);
     } catch (error: any) {
       console.error('Database save failed:', error);
       updateProcessingStep('save', 'error', 'Failed to save results');
@@ -758,51 +810,85 @@ const PDFUploadProcessor: React.FC = () => {
 
         <TabsContent value="analysis" className="space-y-6">
           {aiAnalysis ? (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Brain className="h-5 w-5" />
-                  AI Analysis Results
-                </CardTitle>
-                <CardDescription>
-                  Structured medical data extracted from your document
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="font-medium">Document Type</label>
-                    <p className="text-muted-foreground">{aiAnalysis.documentType}</p>
+            <>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Brain className="h-5 w-5" />
+                    AI Analysis Results
+                  </CardTitle>
+                  <CardDescription>
+                    Structured medical data extracted from your document
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="font-medium">Document Type</label>
+                      <p className="text-muted-foreground">{aiAnalysis.documentType}</p>
+                    </div>
+                    <div>
+                      <label className="font-medium">Confidence Score</label>
+                      <p className="text-muted-foreground">{Math.round(aiAnalysis.confidence * 100)}%</p>
+                    </div>
                   </div>
-                  <div>
-                    <label className="font-medium">Confidence Score</label>
-                    <p className="text-muted-foreground">{Math.round(aiAnalysis.confidence * 100)}%</p>
-                  </div>
-                </div>
 
-                {Object.keys(aiAnalysis.extractedFields).length > 0 && (
-                  <div>
-                    <label className="font-medium">Extracted Data</label>
-                    <ScrollArea className="h-60 mt-2">
-                      <pre className="text-sm bg-muted p-4 rounded">
-                        {JSON.stringify(aiAnalysis.extractedFields, null, 2)}
-                      </pre>
-                    </ScrollArea>
-                  </div>
-                )}
+                  {Object.keys(aiAnalysis.extractedFields).length > 0 && (
+                    <div>
+                      <label className="font-medium">Extracted Medical Data</label>
+                      <div className="mt-2 space-y-3">
+                        {Object.entries(aiAnalysis.extractedFields).map(([tableName, data]) => (
+                          <Card key={tableName} className="border">
+                            <CardHeader className="pb-3">
+                              <CardTitle className="text-sm flex items-center gap-2">
+                                <Database className="h-4 w-4" />
+                                {tableName}
+                              </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                              <ScrollArea className="h-32">
+                                <pre className="text-xs bg-muted p-2 rounded">
+                                  {JSON.stringify(data, null, 2)}
+                                </pre>
+                              </ScrollArea>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
-                {aiAnalysis.recommendations.length > 0 && (
-                  <div>
-                    <label className="font-medium">Recommendations</label>
-                    <ul className="mt-2 space-y-1">
-                      {aiAnalysis.recommendations.map((rec, index) => (
-                        <li key={index} className="text-sm text-muted-foreground">• {rec}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                  {aiAnalysis.recommendations.length > 0 && (
+                    <div>
+                      <label className="font-medium">Recommendations</label>
+                      <ul className="mt-2 space-y-1">
+                        {aiAnalysis.recommendations.map((rec, index) => (
+                          <li key={index} className="text-sm text-muted-foreground">• {rec}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Database Link */}
+              <Card>
+                <CardContent className="text-center py-6">
+                  <Database className="h-8 w-8 text-primary mx-auto mb-2" />
+                  <h3 className="font-semibold mb-2">View Saved Data in Database</h3>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    The extracted medical data has been saved to your database tables
+                  </p>
+                  <Button 
+                    onClick={() => window.location.href = '/dashboard?tab=database'}
+                    className="gap-2"
+                  >
+                    <Eye className="h-4 w-4" />
+                    View Database Tables
+                  </Button>
+                </CardContent>
+              </Card>
+            </>
           ) : (
             <Card>
               <CardContent className="text-center py-8">
