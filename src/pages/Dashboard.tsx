@@ -11,6 +11,8 @@ import PDFUploadProcessor from '@/components/PDFUploadProcessor';
 const Dashboard = () => {
   const { user, signOut } = useAuth();
   const [activeTab, setActiveTab] = useState('overview');
+  
+  console.log('Dashboard render - User:', user?.email, 'Active tab:', activeTab);
 
   const handleSignOut = async () => {
     const { error } = await signOut();

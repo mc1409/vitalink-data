@@ -47,6 +47,7 @@ const DatabaseDashboard = () => {
   };
 
   const getTableInfo = async () => {
+    console.log('Database refresh - checking tables...');
     setRefreshing(true);
     try {
       const tableInfos: TableInfo[] = [];
