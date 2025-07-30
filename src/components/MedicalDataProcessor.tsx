@@ -501,8 +501,9 @@ const MedicalDataProcessor: React.FC = () => {
       throw error;
     }
   };
-      if (extractedData.HEART_METRICS) {
-        addLog('Database Mapping', 'processing', 'Processing heart metrics...');
+
+  // Enhanced processing function that combines everything
+  const processDocumentWithDatabase = async (text: string, filename: string): Promise<void> => {
         
         try {
           const heartData = filterValidFields(extractedData.HEART_METRICS, 'heart_metrics');
