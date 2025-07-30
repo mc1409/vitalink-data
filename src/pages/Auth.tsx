@@ -84,6 +84,29 @@ const Auth = () => {
     setIsLoading(false);
   };
 
+  const handleQuickLogin = async () => {
+    setError('');
+    setIsLoading(true);
+    
+    const { error } = await signIn('test@vitalink.com', 'testpassword123');
+    
+    if (error) {
+      setError('Quick login failed. Creating test account...');
+      // If login fails, try to create the account
+      const { error: signUpError } = await signUp('test@vitalink.com', 'testpassword123', 'Test User');
+      if (signUpError) {
+        setError('Failed to create test account: ' + signUpError.message);
+      } else {
+        toast.success('Test account created! Please check email or try signing in.');
+      }
+    } else {
+      toast.success('Quick login successful!');
+      navigate('/');
+    }
+    
+    setIsLoading(false);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-subtle flex items-center justify-center p-4">
       <div className="w-full max-w-md">
@@ -156,6 +179,28 @@ const Auth = () => {
                   >
                     {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Sign In
+                  </Button>
+                  
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center">
+                      <span className="w-full border-t" />
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-background px-2 text-muted-foreground">
+                        Test Account
+                      </span>
+                    </div>
+                  </div>
+                  
+                  <Button 
+                    type="button"
+                    variant="outline"
+                    onClick={handleQuickLogin}
+                    className="w-full border-dashed hover:bg-accent/50"
+                    disabled={isLoading}
+                  >
+                    {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Quick Login (Test Account)
                   </Button>
                 </form>
               </TabsContent>
