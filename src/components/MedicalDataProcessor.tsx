@@ -86,6 +86,14 @@ const MedicalDataProcessor: React.FC = () => {
     try {
       const formData = new FormData();
       formData.append('file', file);
+      
+      // Add file type information to help the edge function
+      if (file.name) {
+        const extension = file.name.split('.').pop()?.toLowerCase();
+        if (extension) {
+          formData.append('fileType', extension);
+        }
+      }
 
       const { data, error } = await supabase.functions.invoke('extract-document-text', {
         body: formData,
@@ -93,12 +101,16 @@ const MedicalDataProcessor: React.FC = () => {
 
       if (error) throw error;
 
-      addLog('Text Extraction', 'success', `Successfully extracted ${data.text.length} characters from file`, {
-        textLength: data.text.length,
-        preview: data.text.substring(0, 200) + '...'
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to extract text from file');
+      }
+
+      addLog('Text Extraction', 'success', `Successfully extracted ${data.extractedText.length} characters from file`, {
+        textLength: data.extractedText.length,
+        preview: data.extractedText.substring(0, 200) + '...'
       });
 
-      return data.text;
+      return data.extractedText;
     } catch (error: any) {
       addLog('Text Extraction', 'error', `Failed to extract text: ${error.message}`);
       throw error;

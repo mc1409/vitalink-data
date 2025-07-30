@@ -25,6 +25,17 @@ serve(async (req) => {
     if (!fileType && file.name) {
       const extension = file.name.split('.').pop()?.toLowerCase();
       fileType = extension || 'unknown';
+    } else if (!fileType && file.type) {
+      // Try to infer from MIME type
+      const mimeTypeMap: { [key: string]: string } = {
+        'application/pdf': 'pdf',
+        'text/plain': 'txt',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+        'text/csv': 'csv',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+        'application/vnd.ms-excel': 'xls'
+      };
+      fileType = mimeTypeMap[file.type] || 'unknown';
     }
 
     // Ensure fileType is not null/undefined
