@@ -1,19 +1,70 @@
-import React, { useState } from 'react';
-import { useAuth } from '@/components/AuthProvider';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Heart, Activity, Brain, Database, LogOut, Plus, TrendingUp } from 'lucide-react';
-import { toast } from 'sonner';
-import DatabaseDashboard from '@/components/DatabaseDashboard';
+import React, { useState, useEffect } from 'react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { 
+  FileText, 
+  Database, 
+  Upload, 
+  Activity, 
+  BarChart3, 
+  Users,
+  Brain,
+  Table,
+  Eye,
+  Heart,
+  LogOut
+} from 'lucide-react';
 import PDFUploadProcessor from '@/components/PDFUploadProcessor';
+import DatabaseDashboard from '@/components/DatabaseDashboard';
+import { useAuth } from '@/components/AuthProvider';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 const Dashboard = () => {
   const { user, signOut, loading } = useAuth();
-  const [activeTab, setActiveTab] = useState('overview');
-  
-  console.log('Dashboard render - User:', user?.email, 'Loading:', loading, 'Active tab:', activeTab);
-  
+  const [recentActivity, setRecentActivity] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState(() => {
+    // Check if URL has tab parameter
+    const urlParams = new URLSearchParams(window.location.search);
+    return urlParams.get('tab') || 'overview';
+  });
+
+  // Fetch recent processing activity
+  useEffect(() => {
+    const fetchRecentActivity = async () => {
+      if (!user) return;
+      
+      try {
+        const { data, error } = await supabase
+          .from('document_processing_logs')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(5);
+        
+        if (!error) {
+          setRecentActivity(data || []);
+        }
+      } catch (error) {
+        console.error('Failed to fetch recent activity:', error);
+      }
+    };
+
+    fetchRecentActivity();
+  }, [user]);
+
+  // Update URL when tab changes
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (activeTab === 'overview') {
+      url.searchParams.delete('tab');
+    } else {
+      url.searchParams.set('tab', activeTab);
+    }
+    window.history.replaceState({}, '', url.toString());
+  }, [activeTab]);
+
   // Show loading state while authentication is being determined
   if (loading) {
     return (
@@ -39,41 +90,6 @@ const Dashboard = () => {
       toast.success('Signed out successfully');
     }
   };
-
-  const healthMetrics = [
-    {
-      title: "Medical Records",
-      description: "Lab results, imaging studies, and medical history",
-      icon: Heart,
-      count: "0",
-      color: "text-primary",
-      bgColor: "bg-primary-light"
-    },
-    {
-      title: "Activity Data",
-      description: "Steps, workouts, and fitness tracking",
-      icon: Activity,
-      count: "0",
-      color: "text-accent",
-      bgColor: "bg-accent/10"
-    },
-    {
-      title: "Biomarkers",
-      description: "Sleep, HRV, and recovery metrics",
-      icon: Brain,
-      count: "0",
-      color: "text-info",
-      bgColor: "bg-info/10"
-    },
-    {
-      title: "Connected Devices",
-      description: "Apple Health, WHOOP, Oura, and more",
-      icon: Database,
-      count: "0",
-      color: "text-warning",
-      bgColor: "bg-warning/10"
-    }
-  ];
 
   return (
     <div className="min-h-screen bg-gradient-subtle">
@@ -104,137 +120,152 @@ const Dashboard = () => {
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
-        {/* Welcome Section */}
-        <div className="mb-8">
-          <h2 className="text-3xl font-bold text-foreground mb-2">Health Dashboard</h2>
-          <p className="text-muted-foreground text-lg">
-            Your comprehensive health data platform is ready. Start by connecting your devices or adding medical records.
-          </p>
-        </div>
-
-        {/* Quick Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          <Button 
-            className="h-auto p-4 bg-gradient-primary hover:opacity-90 shadow-medical"
-            onClick={() => setActiveTab('upload')}
-          >
-            <div className="flex flex-col items-center gap-2">
-              <Plus className="h-6 w-6" />
-              <span>Upload Medical Document</span>
-            </div>
-          </Button>
-          <Button 
-            variant="outline" 
-            className="h-auto p-4 shadow-card-custom"
-            onClick={() => setActiveTab('database')}
-          >
-            <div className="flex flex-col items-center gap-2">
-              <Database className="h-6 w-6" />
-              <span>View Database</span>
-            </div>
-          </Button>
-          <Button variant="outline" className="h-auto p-4 shadow-card-custom">
-            <div className="flex flex-col items-center gap-2">
-              <TrendingUp className="h-6 w-6" />
-              <span>View Trends</span>
-            </div>
-          </Button>
-          <Button variant="outline" className="h-auto p-4 shadow-card-custom">
-            <div className="flex flex-col items-center gap-2">
-              <Activity className="h-6 w-6" />
-              <span>Health Summary</span>
-            </div>
-          </Button>
-        </div>
-
-        {/* Main Dashboard Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="upload">Upload Documents</TabsTrigger>
-            <TabsTrigger value="database">Database</TabsTrigger>
-            <TabsTrigger value="analytics">Analytics</TabsTrigger>
+            <TabsTrigger value="overview" className="flex items-center gap-2">
+              <BarChart3 className="h-4 w-4" />
+              Overview
+            </TabsTrigger>
+            <TabsTrigger value="upload" className="flex items-center gap-2">
+              <Upload className="h-4 w-4" />
+              Process Documents
+            </TabsTrigger>
+            <TabsTrigger value="database" className="flex items-center gap-2">
+              <Database className="h-4 w-4" />
+              View Data Tables
+            </TabsTrigger>
+            <TabsTrigger value="analytics" className="flex items-center gap-2">
+              <Activity className="h-4 w-4" />
+              Analytics
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-6">
-            {/* Health Metrics Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-              {healthMetrics.map((metric, index) => (
-                <Card key={index} className="shadow-medical border-0 hover:shadow-glow transition-all duration-300">
-                  <CardHeader className="pb-3">
-                    <div className="flex items-center justify-between">
-                      <div className={`p-2 rounded-lg ${metric.bgColor}`}>
-                        <metric.icon className={`h-5 w-5 ${metric.color}`} />
-                      </div>
-                      <span className={`text-2xl font-bold ${metric.color}`}>{metric.count}</span>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <CardTitle className="text-lg mb-1">{metric.title}</CardTitle>
-                    <CardDescription>{metric.description}</CardDescription>
-                  </CardContent>
-                </Card>
-              ))}
+            {/* Quick Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Documents Processed</CardTitle>
+                  <FileText className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{recentActivity.length}</div>
+                  <p className="text-xs text-muted-foreground">Recent uploads</p>
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Medical Records</CardTitle>
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">
+                    {recentActivity.filter(item => item.processing_status === 'completed').length}
+                  </div>
+                  <p className="text-xs text-muted-foreground">Successfully processed</p>
+                </CardContent>
+              </Card>
+              
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Data Tables</CardTitle>
+                  <Database className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">15</div>
+                  <p className="text-xs text-muted-foreground">Medical data tables</p>
+                </CardContent>
+              </Card>
             </div>
 
-            {/* Getting Started Section */}
-            <Card className="shadow-medical border-0">
+            {/* Recent Activity */}
+            <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Heart className="h-5 w-5 text-primary" />
-                  Getting Started with VitaLink Data
+                  <Activity className="h-5 w-5" />
+                  Recent Document Processing
                 </CardTitle>
                 <CardDescription>
-                  Your comprehensive health data platform is now set up with the following capabilities:
+                  Your latest document uploads and AI analysis results
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-4">
-                    <h4 className="font-semibold text-foreground">Medical Records System</h4>
-                    <ul className="space-y-2 text-sm text-muted-foreground">
-                      <li>• Complete lab test tracking (CBC, Chemistry, Lipids)</li>
-                      <li>• Imaging studies management</li>
-                      <li>• Cardiovascular test results</li>
-                      <li>• Allergy and medication tracking</li>
-                      <li>• Patient demographics and insurance info</li>
-                    </ul>
-                  </div>
-                  <div className="space-y-4">
-                    <h4 className="font-semibold text-foreground">Biomarker Data Platform</h4>
-                    <ul className="space-y-2 text-sm text-muted-foreground">
-                      <li>• Apple Health integration ready</li>
-                      <li>• WHOOP and Oura device support</li>
-                      <li>• Sleep and recovery tracking</li>
-                      <li>• Heart rate variability monitoring</li>
-                      <li>• Microbiome analysis (Viome)</li>
-                      <li>• Nutrition and activity metrics</li>
-                    </ul>
-                  </div>
-                </div>
-                
-                <div className="border-t pt-4">
-                  <h4 className="font-semibold text-foreground mb-2">Features Available</h4>
-                  <div className="flex flex-wrap gap-2">
+              <CardContent>
+                {recentActivity.length === 0 ? (
+                  <div className="text-center py-8">
+                    <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-muted-foreground">No documents processed yet</p>
                     <Button 
-                      size="sm" 
-                      className="bg-gradient-primary"
+                      className="mt-4" 
                       onClick={() => setActiveTab('upload')}
                     >
-                      Upload Medical Documents
+                      Process Your First Document
                     </Button>
-                    <Button 
-                      size="sm" 
-                      variant="outline"
-                      onClick={() => setActiveTab('database')}
-                    >
-                      View Database Tables
-                    </Button>
-                    <Button size="sm" variant="outline">API Documentation</Button>
                   </div>
-                </div>
+                ) : (
+                  <div className="space-y-4">
+                    {recentActivity.map((item) => (
+                      <div key={item.id} className="flex items-center justify-between p-4 border rounded-lg">
+                        <div className="space-y-1">
+                          <h4 className="font-semibold">{item.filename}</h4>
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <span>{(item.file_size / 1024).toFixed(1)} KB</span>
+                            <span>•</span>
+                            <span>{new Date(item.created_at).toLocaleDateString()}</span>
+                            {item.confidence_score && (
+                              <>
+                                <span>•</span>
+                                <span>{Math.round(item.confidence_score * 100)}% confidence</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant={item.processing_status === 'completed' ? 'default' : 'secondary'}>
+                            {item.processing_status}
+                          </Badge>
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => setActiveTab('database')}
+                          >
+                            <Eye className="h-4 w-4 mr-1" />
+                            View Data
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
+
+            {/* Quick Actions */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => setActiveTab('upload')}>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Brain className="h-5 w-5 text-primary" />
+                    Process New Document
+                  </CardTitle>
+                  <CardDescription>
+                    Upload medical documents for AI analysis and data extraction
+                  </CardDescription>
+                </CardHeader>
+              </Card>
+              
+              <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => setActiveTab('database')}>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Table className="h-5 w-5 text-primary" />
+                    Browse Data Tables
+                  </CardTitle>
+                  <CardDescription>
+                    View and explore your medical data stored in database tables
+                  </CardDescription>
+                </CardHeader>
+              </Card>
+            </div>
           </TabsContent>
 
           <TabsContent value="upload">
@@ -255,7 +286,7 @@ const Dashboard = () => {
               </CardHeader>
               <CardContent className="py-12">
                 <div className="text-center">
-                  <TrendingUp className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <BarChart3 className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                   <p className="text-muted-foreground">
                     Analytics dashboard will be available once you start uploading data
                   </p>
