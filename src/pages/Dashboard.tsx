@@ -16,7 +16,7 @@ import {
   Heart,
   LogOut
 } from 'lucide-react';
-import PDFUploadProcessor from '@/components/PDFUploadProcessor';
+import MedicalDataProcessor from '@/components/MedicalDataProcessor';
 import DatabaseDashboard from '@/components/DatabaseDashboard';
 import { useAuth } from '@/components/AuthProvider';
 import { supabase } from '@/integrations/supabase/client';
@@ -269,7 +269,7 @@ const Dashboard = () => {
           </TabsContent>
 
           <TabsContent value="upload">
-            <PDFUploadProcessor />
+            <MedicalDataProcessor />
           </TabsContent>
 
           <TabsContent value="database">
