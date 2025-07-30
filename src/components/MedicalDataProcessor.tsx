@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Upload, FileText, Database, Brain, CheckCircle, AlertCircle, Eye, Clock } from 'lucide-react';
+import { Upload, FileText, Database, Brain, CheckCircle, AlertCircle, Eye, Clock, MessageSquare, ArrowUp, ArrowDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -32,6 +32,8 @@ interface ProcessingState {
   logs: ProcessingLog[];
   streamingText: string;
   showStreamingText: boolean;
+  llmQuery: string;
+  llmResponse: string;
 }
 
 const MedicalDataProcessor: React.FC = () => {
@@ -46,7 +48,9 @@ const MedicalDataProcessor: React.FC = () => {
     savedRecords: [],
     logs: [],
     streamingText: '',
-    showStreamingText: false
+    showStreamingText: false,
+    llmQuery: '',
+    llmResponse: ''
   });
   
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -156,11 +160,24 @@ const MedicalDataProcessor: React.FC = () => {
     addLog('AI Processing', 'processing', 'Sending text to AI for medical data extraction...');
     
     try {
+      // Store the query being sent
+      const queryData = { text, filename: file?.name || 'Direct Text Input' };
+      setProcessing(prev => ({ 
+        ...prev, 
+        llmQuery: JSON.stringify(queryData, null, 2)
+      }));
+
       const { data, error } = await supabase.functions.invoke('process-medical-document', {
-        body: { text, filename: file?.name || 'Direct Text Input' },
+        body: queryData,
       });
 
       if (error) throw error;
+
+      // Store the response received
+      setProcessing(prev => ({ 
+        ...prev, 
+        llmResponse: JSON.stringify(data, null, 2)
+      }));
 
       addLog('AI Processing', 'success', `AI successfully extracted ${Object.keys(data.extractedFields).length} data entities`, {
         documentType: data.documentType,
@@ -459,7 +476,9 @@ const MedicalDataProcessor: React.FC = () => {
       extractedData: null,
       savedRecords: [],
       streamingText: '',
-      showStreamingText: false
+      showStreamingText: false,
+      llmQuery: '',
+      llmResponse: ''
     }));
 
     try {
@@ -804,9 +823,10 @@ const MedicalDataProcessor: React.FC = () => {
       {/* Processing and Results */}
       {(processing.logs.length > 0 || processing.isProcessing) && (
         <Tabs defaultValue="pipeline" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="pipeline">Processing Pipeline</TabsTrigger>
             <TabsTrigger value="logs">Detailed Logs</TabsTrigger>
+            <TabsTrigger value="llm">LLM Communication</TabsTrigger>
             <TabsTrigger value="mapping">Data Mapping</TabsTrigger>
             <TabsTrigger value="results">Database Results</TabsTrigger>
           </TabsList>
@@ -835,6 +855,64 @@ const MedicalDataProcessor: React.FC = () => {
               </CardHeader>
               <CardContent>
                 {renderLogs()}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="llm">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <MessageSquare className="h-5 w-5" />
+                  LLM Communication Logs
+                </CardTitle>
+                <CardDescription>
+                  View the exact query sent to AI and the response received for analysis
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {processing.llmQuery && (
+                  <div>
+                    <h4 className="font-medium text-sm mb-3 flex items-center gap-2">
+                      <ArrowUp className="h-4 w-4 text-blue-600" />
+                      Query Sent to AI Model
+                    </h4>
+                    <Card className="bg-blue-50 border-blue-200">
+                      <CardContent className="p-4">
+                        <ScrollArea className="h-64">
+                          <pre className="text-xs font-mono whitespace-pre-wrap">
+                            {processing.llmQuery}
+                          </pre>
+                        </ScrollArea>
+                      </CardContent>
+                    </Card>
+                  </div>
+                )}
+                
+                {processing.llmResponse && (
+                  <div>
+                    <h4 className="font-medium text-sm mb-3 flex items-center gap-2">
+                      <ArrowDown className="h-4 w-4 text-green-600" />
+                      Response from AI Model
+                    </h4>
+                    <Card className="bg-green-50 border-green-200">
+                      <CardContent className="p-4">
+                        <ScrollArea className="h-64">
+                          <pre className="text-xs font-mono whitespace-pre-wrap">
+                            {processing.llmResponse}
+                          </pre>
+                        </ScrollArea>
+                      </CardContent>
+                    </Card>
+                  </div>
+                )}
+
+                {!processing.llmQuery && !processing.llmResponse && (
+                  <div className="text-center text-muted-foreground py-8">
+                    <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                    <p>Process a document to see the LLM communication logs</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
