@@ -198,16 +198,71 @@ const MedicalDataProcessor: React.FC = () => {
     const savedRecords: any[] = [];
     let patientId: string | null = null;
 
+    // Define valid columns for each table to filter out invalid fields
+    const validColumns = {
+      patients: [
+        'first_name', 'last_name', 'date_of_birth', 'gender', 'phone_primary', 'phone_secondary',
+        'email', 'address_line1', 'address_line2', 'city', 'state', 'zip_code', 'country',
+        'emergency_contact_name', 'emergency_contact_phone', 'emergency_contact_relationship',
+        'medical_record_number', 'primary_care_physician', 'insurance_provider',
+        'insurance_policy_number', 'insurance_group_number', 'race_ethnicity', 'user_id'
+      ],
+      lab_results: [
+        'result_name', 'numeric_value', 'text_value', 'units', 'reference_range_min',
+        'reference_range_max', 'reference_range_text', 'abnormal_flag', 'result_status',
+        'interpretation', 'reviewing_physician', 'lab_test_id'
+      ],
+      heart_metrics: [
+        'measurement_timestamp', 'device_type', 'resting_heart_rate', 'average_heart_rate',
+        'max_heart_rate', 'min_heart_rate', 'walking_heart_rate', 'workout_heart_rate',
+        'recovery_heart_rate', 'hrv_score', 'hrv_rmssd', 'hrv_sdnn', 'vo2_max',
+        'measurement_context', 'data_source', 'user_id'
+      ],
+      sleep_metrics: [
+        'sleep_date', 'device_type', 'bedtime', 'sleep_start', 'sleep_end', 'wake_time',
+        'total_sleep_time', 'time_in_bed', 'sleep_efficiency', 'sleep_latency',
+        'rem_sleep_minutes', 'deep_sleep_minutes', 'light_sleep_minutes', 'awake_minutes',
+        'sleep_score', 'restfulness_score', 'sleep_disturbances', 'sleep_debt',
+        'data_source', 'user_id'
+      ],
+      activity_metrics: [
+        'measurement_date', 'measurement_timestamp', 'device_type', 'steps_count',
+        'distance_walked_meters', 'distance_ran_meters', 'distance_cycled_meters',
+        'flights_climbed', 'total_calories', 'active_calories', 'basal_calories',
+        'exercise_minutes', 'moderate_activity_minutes', 'vigorous_activity_minutes',
+        'data_source', 'user_id'
+      ]
+    };
+
+    // Helper function to filter and map data to valid columns
+    const filterValidFields = (data: any, tableName: keyof typeof validColumns) => {
+      const validCols = validColumns[tableName];
+      const filtered: any = {};
+      
+      for (const [key, value] of Object.entries(data)) {
+        if (validCols.includes(key) && value !== null && value !== undefined) {
+          filtered[key] = value;
+        } else if (key === 'address' && tableName === 'patients') {
+          // Map 'address' to 'address_line1' for patients
+          filtered.address_line1 = value;
+        }
+      }
+      
+      return filtered;
+    };
+
     try {
       // Step 1: Create patient record if patient data exists
       if (extractedData.PATIENTS) {
         addLog('Database Mapping', 'processing', 'Creating patient record...');
         
-        const patientData = {
-          ...extractedData.PATIENTS,
-          user_id: (await supabase.auth.getUser()).data.user?.id,
-          date_of_birth: extractedData.PATIENTS.date_of_birth || '1990-01-01'
-        };
+        const patientData = filterValidFields(extractedData.PATIENTS, 'patients');
+        patientData.user_id = (await supabase.auth.getUser()).data.user?.id;
+        
+        // Ensure required fields have defaults
+        if (!patientData.date_of_birth) {
+          patientData.date_of_birth = '1990-01-01';
+        }
 
         const { data: patient, error } = await supabase
           .from('patients')
@@ -215,11 +270,13 @@ const MedicalDataProcessor: React.FC = () => {
           .select()
           .single();
 
-        if (error) throw error;
-
-        patientId = patient.id;
-        savedRecords.push({ table: 'patients', data: patient });
-        addLog('Database Mapping', 'success', 'Patient record created successfully', patient);
+        if (error) {
+          addLog('Database Mapping', 'warning', `Patient creation failed: ${error.message}. Continuing with other data.`);
+        } else {
+          patientId = patient.id;
+          savedRecords.push({ table: 'patients', data: patient });
+          addLog('Database Mapping', 'success', 'Patient record created successfully', patient);
+        }
       }
 
       // Step 2: Process lab results
@@ -232,10 +289,12 @@ const MedicalDataProcessor: React.FC = () => {
 
         for (const [key, data] of labResults) {
           try {
+            const labData = filterValidFields(data, 'lab_results');
+            
             const { data: result, error } = await supabase
               .from('lab_results')
               .insert({
-                ...data,
+                ...labData,
                 lab_test_id: null, // Will be linked later if needed
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString()
@@ -243,7 +302,10 @@ const MedicalDataProcessor: React.FC = () => {
               .select()
               .single();
 
-            if (error) throw error;
+            if (error) {
+              addLog('Database Mapping', 'warning', `Lab result failed for ${data.result_name}: ${error.message}`);
+              continue;
+            }
 
             savedRecords.push({ table: 'lab_results', data: result });
             addLog('Database Mapping', 'success', `Lab result saved: ${data.result_name}`, result);
@@ -253,49 +315,85 @@ const MedicalDataProcessor: React.FC = () => {
         }
       }
 
-      // Step 3: Process other health metrics
-      const healthTables = ['HEART_METRICS', 'SLEEP_METRICS', 'ACTIVITY_METRICS', 'NUTRITION_METRICS'];
-      
-      for (const tableName of healthTables) {
-        if (extractedData[tableName]) {
-          const tableKey = tableName.toLowerCase();
-          addLog('Database Mapping', 'processing', `Processing ${tableName}...`);
+      // Step 3: Process heart metrics
+      if (extractedData.HEART_METRICS) {
+        addLog('Database Mapping', 'processing', 'Processing heart metrics...');
+        
+        try {
+          const heartData = filterValidFields(extractedData.HEART_METRICS, 'heart_metrics');
+          heartData.user_id = (await supabase.auth.getUser()).data.user?.id;
+          heartData.device_type = 'manual_entry';
+          heartData.measurement_timestamp = heartData.measurement_timestamp || new Date().toISOString();
 
-          try {
-            const userId = (await supabase.auth.getUser()).data.user?.id;
-            let recordData = {
-              ...extractedData[tableName],
-              user_id: userId,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            };
+          const { data: result, error } = await supabase
+            .from('heart_metrics')
+            .insert(heartData)
+            .select()
+            .single();
 
-            // Add device_type if required
-            if (['heart_metrics', 'sleep_metrics', 'activity_metrics'].includes(tableKey)) {
-              recordData.device_type = 'manual_entry';
-            }
-
-            // Handle measurement timestamp/date fields
-            if (tableKey === 'heart_metrics' && !recordData.measurement_timestamp) {
-              recordData.measurement_timestamp = new Date().toISOString();
-            }
-            if (tableKey === 'activity_metrics' && !recordData.measurement_timestamp) {
-              recordData.measurement_timestamp = new Date().toISOString();
-            }
-
-            const { data: result, error } = await supabase
-              .from(tableKey as any)
-              .insert(recordData)
-              .select()
-              .single();
-
-            if (error) throw error;
-
-            savedRecords.push({ table: tableKey, data: result });
-            addLog('Database Mapping', 'success', `${tableName} data saved successfully`, result);
-          } catch (error: any) {
-            addLog('Database Mapping', 'error', `Failed to save ${tableName}: ${error.message}`);
+          if (error) {
+            addLog('Database Mapping', 'warning', `Heart metrics failed: ${error.message}`);
+          } else {
+            savedRecords.push({ table: 'heart_metrics', data: result });
+            addLog('Database Mapping', 'success', 'Heart metrics saved successfully', result);
           }
+        } catch (error: any) {
+          addLog('Database Mapping', 'warning', `Heart metrics processing failed: ${error.message}`);
+        }
+      }
+
+      // Step 4: Process sleep metrics
+      if (extractedData.SLEEP_METRICS) {
+        addLog('Database Mapping', 'processing', 'Processing sleep metrics...');
+        
+        try {
+          const sleepData = filterValidFields(extractedData.SLEEP_METRICS, 'sleep_metrics');
+          sleepData.user_id = (await supabase.auth.getUser()).data.user?.id;
+          sleepData.device_type = 'manual_entry';
+          sleepData.sleep_date = sleepData.sleep_date || new Date().toISOString().split('T')[0];
+
+          const { data: result, error } = await supabase
+            .from('sleep_metrics')
+            .insert(sleepData)
+            .select()
+            .single();
+
+          if (error) {
+            addLog('Database Mapping', 'warning', `Sleep metrics failed: ${error.message}`);
+          } else {
+            savedRecords.push({ table: 'sleep_metrics', data: result });
+            addLog('Database Mapping', 'success', 'Sleep metrics saved successfully', result);
+          }
+        } catch (error: any) {
+          addLog('Database Mapping', 'warning', `Sleep metrics processing failed: ${error.message}`);
+        }
+      }
+
+      // Step 5: Process activity metrics
+      if (extractedData.ACTIVITY_METRICS) {
+        addLog('Database Mapping', 'processing', 'Processing activity metrics...');
+        
+        try {
+          const activityData = filterValidFields(extractedData.ACTIVITY_METRICS, 'activity_metrics');
+          activityData.user_id = (await supabase.auth.getUser()).data.user?.id;
+          activityData.device_type = 'manual_entry';
+          activityData.measurement_date = activityData.measurement_date || new Date().toISOString().split('T')[0];
+          activityData.measurement_timestamp = activityData.measurement_timestamp || new Date().toISOString();
+
+          const { data: result, error } = await supabase
+            .from('activity_metrics')
+            .insert(activityData)
+            .select()
+            .single();
+
+          if (error) {
+            addLog('Database Mapping', 'warning', `Activity metrics failed: ${error.message}`);
+          } else {
+            savedRecords.push({ table: 'activity_metrics', data: result });
+            addLog('Database Mapping', 'success', 'Activity metrics saved successfully', result);
+          }
+        } catch (error: any) {
+          addLog('Database Mapping', 'warning', `Activity metrics processing failed: ${error.message}`);
         }
       }
 
