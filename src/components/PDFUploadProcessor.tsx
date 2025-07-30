@@ -1,212 +1,264 @@
-import React, { useState, useCallback } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
-import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import React, { useState, useCallback, useEffect } from 'react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Progress } from "@/components/ui/progress";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
 import { 
   Upload, 
   FileText, 
-  Brain, 
   CheckCircle, 
-  AlertCircle, 
+  XCircle, 
   Clock, 
+  AlertCircle,
+  Brain,
+  Database,
+  History,
   Eye,
-  Download,
+  Loader2,
+  File,
   Trash2,
-  RefreshCw
+  Type
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/components/AuthProvider';
-import { toast } from 'sonner';
-import { FileProcessor, ExtractionResult, ProcessingProgress } from '@/utils/FileProcessor';
+import { useToast } from "@/hooks/use-toast";
 
 interface ProcessingStep {
   id: string;
-  type: string;
-  status: 'running' | 'completed' | 'error';
-  message: string;
-  timestamp: number;
-  details?: any;
+  title: string;
+  status: 'pending' | 'processing' | 'completed' | 'error';
+  message?: string;
+  timestamp?: Date;
 }
 
 interface ExtractedData {
   documentType: string;
   confidence: number;
-  extractedFields: any;
+  extractedFields: Record<string, any>;
   recommendations: string[];
 }
 
 interface ProcessingLog {
   id: string;
-  user_id: string;
   filename: string;
   file_size: number;
-  storage_path: string;
-  upload_status: string;
   processing_status: string;
+  upload_status: string;
   ai_analysis_status: string;
-  extracted_text_preview?: string;
-  ai_structured_data?: any;
   confidence_score?: number;
-  error_message?: string;
   created_at: string;
   updated_at: string;
+  ai_structured_data?: any;
+  extracted_text_preview?: string;
+  error_message?: string;
+  storage_path?: string;
+}
+
+interface ExtractionResult {
+  success: boolean;
+  extractedText: string;
+  filename: string;
+  fileSize: number;
+  textLength: number;
+  preview: string;
+  error?: string;
 }
 
 const PDFUploadProcessor: React.FC = () => {
-  const { user } = useAuth();
-  const [uploading, setUploading] = useState(false);
-  const [processing, setProcessing] = useState(false);
+  const { toast } = useToast();
+  const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [currentFile, setCurrentFile] = useState<File | null>(null);
   const [extractedText, setExtractedText] = useState('');
+  const [directText, setDirectText] = useState('');
   const [aiAnalysis, setAiAnalysis] = useState<ExtractedData | null>(null);
   const [uploadHistory, setUploadHistory] = useState<ProcessingLog[]>([]);
-  const [selectedLog, setSelectedLog] = useState<ProcessingLog | null>(null);
   const [processingSteps, setProcessingSteps] = useState<ProcessingStep[]>([]);
-  const [showDetailedLogs, setShowDetailedLogs] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [activeInputMethod, setActiveInputMethod] = useState<'file' | 'text'>('file');
 
-  const addProcessingStep = useCallback((type: string, status: ProcessingStep['status'], message: string, details?: any) => {
+  // Check authentication
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setIsAuthenticated(!!user);
+    };
+    checkAuth();
+  }, []);
+
+  // Add and update processing steps
+  const addProcessingStep = useCallback((id: string, title: string, status: ProcessingStep['status'], message?: string) => {
     const newStep: ProcessingStep = {
-      id: `${type}-${Date.now()}-${Math.random()}`,
-      type,
+      id: `${id}-${Date.now()}`,
+      title,
       status,
       message,
-      timestamp: Date.now(),
-      details
+      timestamp: new Date()
     };
     setProcessingSteps(prev => [...prev, newStep]);
     return newStep.id;
   }, []);
 
-  const updateProcessingStep = useCallback((stepId: string, status: ProcessingStep['status'], message: string, details?: any) => {
+  const updateProcessingStep = useCallback((stepId: string, status: ProcessingStep['status'], message?: string) => {
     setProcessingSteps(prev => 
       prev.map(step => 
-        step.id === stepId 
-          ? { ...step, status, message, details: details || step.details }
+        step.id.startsWith(stepId) 
+          ? { ...step, status, message, timestamp: new Date() }
           : step
       )
     );
   }, []);
 
+  // Fetch upload history
   const fetchUploadHistory = useCallback(async () => {
+    if (!isAuthenticated) return;
+    
     try {
       const { data, error } = await supabase
         .from('document_processing_logs')
         .select('*')
         .order('created_at', { ascending: false })
-        .limit(50);
+        .limit(20);
 
       if (error) throw error;
       setUploadHistory(data || []);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching upload history:', error);
-      toast.error('Failed to fetch upload history');
+      toast({
+        title: "Error",
+        description: "Failed to fetch upload history",
+        variant: "destructive",
+      });
     }
-  }, []);
+  }, [isAuthenticated, toast]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     fetchUploadHistory();
   }, [fetchUploadHistory]);
 
-  const extractTextFromDocument = async (file: File): Promise<ExtractionResult> => {
-    return await FileProcessor.extractText(file, (progress: ProcessingProgress) => {
-      // Convert FileProcessor progress to our existing step system
-      const stepMapping: { [key: string]: string } = {
-        'validation': 'FILE_VALIDATION',
-        'detection': 'FILE_TYPE_DETECTION',
-        'pdf_loading': 'PDF_LOADING',
-        'pdf_extraction': 'TEXT_EXTRACTION',
-        'docx_processing': 'TEXT_EXTRACTION',
-        'text_reading': 'TEXT_EXTRACTION',
-        'csv_parsing': 'TEXT_EXTRACTION',
-        'excel_processing': 'TEXT_EXTRACTION',
-        'completed': 'EXTRACTION_COMPLETED'
-      };
-
-      const stepName = stepMapping[progress.stage] || 'PROCESSING';
-      
-      addProcessingStep(stepName, 'running', progress.message, {
-        stage: progress.stage,
-        progress: progress.progress
-      });
-    });
+  const getFileType = (file: File): string => {
+    const extension = file.name.split('.').pop()?.toLowerCase() || '';
+    const mimeType = file.type.toLowerCase();
+    
+    if (mimeType.includes('pdf') || extension === 'pdf') return 'pdf';
+    if (mimeType.includes('word') || extension === 'docx' || extension === 'doc') return 'docx';
+    if (mimeType.includes('text') || extension === 'txt') return 'txt';
+    if (mimeType.includes('csv') || extension === 'csv') return 'csv';
+    if (mimeType.includes('spreadsheet') || extension === 'xlsx' || extension === 'xls') return 'xlsx';
+    
+    return extension || 'unknown';
   };
 
-  const processWithAI = async (text: string, filename: string): Promise<ExtractedData> => {
-    const aiRequestStepId = addProcessingStep('AI_ANALYSIS', 'running', 'Sending data to Azure OpenAI for analysis...');
-    
-    // Log the prompt being sent
-    const prompt = {
-      extractedText: text,
-      filename: filename
-    };
-    
-    updateProcessingStep(aiRequestStepId, 'running', 'Processing with AI model...', {
-      prompt: prompt,
-      textLength: text.length,
-      model: 'Azure OpenAI GPT-4'
-    });
+  // Extract text from document using server-side function
+  const extractTextFromDocument = useCallback(async (file: File): Promise<string> => {
+    try {
+      updateProcessingStep('extract', 'processing', 'Analyzing document structure...');
+      
+      const fileType = getFileType(file);
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('fileType', fileType);
 
-    const { data, error } = await supabase.functions.invoke('process-medical-document', {
-      body: prompt
-    });
+      console.log(`Calling server-side extraction for ${file.name} (${fileType})`);
 
-    if (error) {
-      updateProcessingStep(aiRequestStepId, 'error', `AI analysis failed: ${error.message}`, {
-        error: error.message
+      const { data, error } = await supabase.functions.invoke('extract-document-text', {
+        body: formData,
       });
+
+      if (error) {
+        console.error('Server extraction error:', error);
+        throw new Error(`Server extraction failed: ${error.message}`);
+      }
+
+      const result = data as ExtractionResult;
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to extract text from document');
+      }
+
+      if (!result.extractedText || result.extractedText.trim().length === 0) {
+        throw new Error('No readable text found in the document');
+      }
+
+      updateProcessingStep('extract', 'completed', `Successfully extracted ${result.textLength} characters`);
+      return result.extractedText;
+    } catch (error: any) {
+      console.error('Text extraction failed:', error);
+      updateProcessingStep('extract', 'error', error.message);
       throw error;
     }
-    
-    updateProcessingStep(aiRequestStepId, 'completed', 'AI analysis request successful', {
-      responseReceived: true,
-      response: data
-    });
-    
-    return data;
-  };
+  }, [updateProcessingStep]);
 
-  const saveToDatabase = async (logId: string, extractedData: ExtractedData) => {
-    const saveStepId = addProcessingStep('DATABASE_SAVE', 'running', 'Saving structured data to database...');
-    
+  // Process with AI
+  const processWithAI = useCallback(async (text: string, filename: string): Promise<ExtractedData> => {
     try {
+      updateProcessingStep('ai', 'processing', 'Analyzing text with AI...');
+
+      const { data, error } = await supabase.functions.invoke('process-medical-document', {
+        body: { extractedText: text, filename }
+      });
+
+      if (error) {
+        console.error('AI processing error:', error);
+        throw new Error(`AI analysis failed: ${error.message}`);
+      }
+
+      if (!data || data.documentType === 'error') {
+        throw new Error(data?.error || 'AI analysis failed');
+      }
+
+      updateProcessingStep('ai', 'completed', `Analysis complete with ${Math.round(data.confidence * 100)}% confidence`);
+      return data;
+    } catch (error: any) {
+      console.error('AI processing failed:', error);
+      updateProcessingStep('ai', 'error', error.message);
+      throw error;
+    }
+  }, [updateProcessingStep]);
+
+  // Save to database
+  const saveToDatabase = useCallback(async (logId: string, analysis: ExtractedData, textPreview: string, storagePath?: string) => {
+    try {
+      updateProcessingStep('save', 'processing', 'Saving results to database...');
+
       const { error } = await supabase
         .from('document_processing_logs')
         .update({
           processing_status: 'completed',
-          ai_structured_data: extractedData.extractedFields,
-          confidence_score: extractedData.confidence
+          ai_analysis_status: 'completed',
+          ai_structured_data: analysis.extractedFields,
+          confidence_score: analysis.confidence,
+          extracted_text_preview: textPreview,
+          ...(storagePath && { storage_path: storagePath })
         })
         .eq('id', logId);
 
       if (error) throw error;
-      
-      updateProcessingStep(saveStepId, 'completed', 'Data saved successfully', {
-        logId,
-        tablesUpdated: Object.keys(extractedData.extractedFields)
-      });
-    } catch (error) {
-      updateProcessingStep(saveStepId, 'error', 'Failed to save to database', {
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
-      console.log('Could not update processing log:', error);
-    }
-  };
 
-  const uploadToStorage = async (file: File): Promise<string> => {
-    const filename = `${user?.id}/${Date.now()}-${file.name}`;
-    
-    console.log('Starting storage upload:', { 
-      filename, 
-      fileSize: file.size, 
-      fileType: file.type,
-      userId: user?.id 
-    });
-    
+      updateProcessingStep('save', 'completed', 'Results saved successfully');
+    } catch (error: any) {
+      console.error('Database save failed:', error);
+      updateProcessingStep('save', 'error', 'Failed to save results');
+      throw error;
+    }
+  }, [updateProcessingStep]);
+
+  // Upload to storage
+  const uploadToStorage = useCallback(async (file: File, logId: string): Promise<string> => {
     try {
+      updateProcessingStep('upload', 'processing', 'Uploading file to storage...');
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
+      const filename = `${user.id}/${logId}/${file.name}`;
+      
       const { data, error } = await supabase.storage
         .from('medical-pdfs')
         .upload(filename, file, {
@@ -215,546 +267,587 @@ const PDFUploadProcessor: React.FC = () => {
         });
 
       if (error) {
-        console.error('Storage upload error details:', {
-          error: error,
-          message: error.message,
-          filename,
-          fileSize: file.size
-        });
-        throw new Error(`Storage upload failed: ${error.message}`);
+        console.error('Storage upload error:', error);
+        throw new Error(`Upload failed: ${error.message}`);
       }
-      
-      console.log('Storage upload successful:', { data, filename });
-      return filename;
-    } catch (uploadError) {
-      console.error('Storage upload exception:', uploadError);
-      throw uploadError;
-    }
-  };
 
-  const createProcessingLog = async (file: File, storagePath: string): Promise<string> => {
+      updateProcessingStep('upload', 'completed', 'File uploaded successfully');
+      return filename;
+    } catch (error: any) {
+      console.error('Upload to storage failed:', error);
+      updateProcessingStep('upload', 'error', error.message);
+      throw error;
+    }
+  }, [updateProcessingStep]);
+
+  // Create processing log
+  const createProcessingLog = useCallback(async (file: File): Promise<string> => {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
       const { data, error } = await supabase
         .from('document_processing_logs')
         .insert({
-          user_id: user?.id,
+          user_id: user.id,
           filename: file.name,
           file_size: file.size,
-          storage_path: storagePath,
-          upload_status: 'completed',
-          processing_status: 'extracting_text',
+          upload_status: 'pending',
+          processing_status: 'pending',
           ai_analysis_status: 'pending'
         })
         .select('id')
         .single();
 
       if (error) throw error;
-      return data?.id || 'temp-' + Date.now();
-    } catch (error) {
-      console.log('Could not create processing log:', error);
-      return 'temp-' + Date.now(); // Return a temporary ID
+      return data.id;
+    } catch (error: any) {
+      console.error('Failed to create processing log:', error);
+      throw error;
     }
-  };
+  }, []);
 
-  const handleFileUpload = async (file: File) => {
-    console.log('Upload attempt - User:', user?.email, 'User ID:', user?.id);
-    
-    if (!user?.id) {
-      console.log('No user ID found, blocking upload');
-      toast.error('Authentication required. Please refresh the page and try again.');
+  // Handle file upload
+  const handleFileUpload = useCallback(async (file: File) => {
+    if (!isAuthenticated) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to upload documents",
+        variant: "destructive",
+      });
       return;
     }
 
-    // Clear previous logs and reset state
-    setProcessingSteps([]);
-    setCurrentFile(file);
-    setUploading(true);
-    setProgress(0);
-    setExtractedText('');
-    setAiAnalysis(null);
-    setShowDetailedLogs(true);
-
-    const startTime = Date.now();
-    addProcessingStep('INIT', 'completed', `Starting upload process for ${file.name}`, {
-      fileName: file.name,
-      fileSize: `${(file.size / 1024 / 1024).toFixed(2)} MB`,
-      fileType: file.type,
-      userId: user.id
-    });
-
-    try {
-      // Step 1: Upload to storage
-      const uploadStepId = addProcessingStep('STORAGE_UPLOAD', 'running', 'Uploading document to Supabase storage...');
-      updateProcessingStep(uploadStepId, 'running', 'Uploading document to Supabase storage...', {
-        fileName: file.name,
-        fileSize: file.size,
-        fileType: file.type
+    if (!file) {
+      toast({
+        title: "Error",
+        description: "No file selected",
+        variant: "destructive",
       });
-      setProgress(20);
-      
-      const storagePath = await uploadToStorage(file);
-      updateProcessingStep(uploadStepId, 'completed', 'Document uploaded successfully', {
-        storagePath,
-        fileSize: `${(file.size / 1024).toFixed(1)} KB`
-      });
-      
-      // Step 2: Create processing log
-      const logStepId = addProcessingStep('CREATE_LOG', 'running', 'Creating processing log entry...');
-      setProgress(40);
-      
-      const logId = await createProcessingLog(file, storagePath);
-      updateProcessingStep(logStepId, 'completed', 'Processing log created', {
-        logId,
-        table: 'document_processing_logs'
-      });
-      
-      // Step 3: Extract text using intelligent file processor
-      const extractStepId = addProcessingStep('TEXT_EXTRACTION', 'running', `Extracting text from ${file.type || 'document'}...`);
-      setProgress(60);
-      setProcessing(true);
-      
-      const extractionResult = await extractTextFromDocument(file);
-      
-      if (!extractionResult.success) {
-        throw new Error(extractionResult.error || 'Failed to extract text from document');
-      }
-      
-      const text = extractionResult.text;
-      setExtractedText(text);
-      
-      updateProcessingStep(extractStepId, 'completed', 
-        `Extracted ${text.length} characters from ${extractionResult.metadata.fileType}`, {
-        textLength: text.length,
-        textPreview: text.substring(0, 500) + (text.length > 500 ? '...' : ''),
-        fullText: text,
-        fileType: extractionResult.metadata.fileType,
-        metadata: extractionResult.metadata
-      });
-      
-      // Update log with extracted text
-      const updateLogStepId = addProcessingStep('UPDATE_LOG_TEXT', 'running', 'Updating processing log with extracted text...');
-      
-      try {
-        await supabase
-          .from('document_processing_logs')
-          .update({
-            processing_status: 'text_extracted',
-            extracted_text_preview: text.substring(0, 500),
-            ai_analysis_status: 'processing'
-          })
-          .eq('id', logId);
-        updateProcessingStep(updateLogStepId, 'completed', 'Processing log updated with extracted text');
-      } catch (error) {
-        updateProcessingStep(updateLogStepId, 'error', 'Failed to update processing log');
-        console.log('Could not update processing log:', error);
-      }
-      
-      // Step 4: AI Analysis
-      const aiStepId = addProcessingStep('AI_ANALYSIS', 'running', 'Sending extracted text to Azure OpenAI for medical data analysis...');
-      setProgress(80);
-      
-      const aiResult = await processWithAI(text, file.name);
-      setAiAnalysis(aiResult);
-      updateProcessingStep(aiStepId, 'completed', `AI analysis completed with ${Math.round(aiResult.confidence * 100)}% confidence`, {
-        documentType: aiResult.documentType,
-        confidence: aiResult.confidence,
-        extractedFieldsCount: Object.keys(aiResult.extractedFields).length,
-        recommendationsCount: aiResult.recommendations.length,
-        fullAnalysis: aiResult
-      });
-      
-      // Step 5: Save to database
-      const saveStepId = addProcessingStep('SAVE_DATABASE', 'running', 'Saving structured data to health database tables...');
-      setProgress(100);
-      
-      await saveToDatabase(logId, aiResult);
-      updateProcessingStep(saveStepId, 'completed', 'Structured data saved successfully to database', {
-        tablesUpdated: Object.keys(aiResult.extractedFields),
-        logId
-      });
-      
-      const endTime = Date.now();
-      const totalTime = ((endTime - startTime) / 1000).toFixed(2);
-      addProcessingStep('COMPLETED', 'completed', `Document processing completed successfully in ${totalTime} seconds`, {
-        totalTime: `${totalTime}s`,
-        stepsCompleted: processingSteps.length + 1
-      });
-      
-      toast.success('Document processed successfully!');
-      fetchUploadHistory();
-      
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      addProcessingStep('ERROR', 'error', `Processing failed: ${errorMessage}`, {
-        error: errorMessage,
-        stack: error instanceof Error ? error.stack : undefined
-      });
-      console.error('Upload error:', error);
-      toast.error('Failed to process document');
-    } finally {
-      setUploading(false);
-      setProcessing(false);
-      setCurrentFile(null);
-      setProgress(0);
+      return;
     }
-  };
 
-  const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    // File size validation (50MB limit)
+    const maxSize = 50 * 1024 * 1024;
+    if (file.size > maxSize) {
+      toast({
+        title: "File Too Large",
+        description: "Please select a file smaller than 50MB",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    await processDocument(file, file.name);
+  }, [isAuthenticated, toast]);
+
+  // Handle text processing
+  const handleTextProcess = useCallback(async () => {
+    if (!isAuthenticated) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to process text",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!directText.trim()) {
+      toast({
+        title: "Error",
+        description: "Please enter some text to process",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (directText.length > 50000) {
+      toast({
+        title: "Text Too Long",
+        description: "Please limit text to 50,000 characters",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    await processDocument(null, 'Direct Text Input');
+  }, [isAuthenticated, directText, toast]);
+
+  // Main processing function
+  const processDocument = useCallback(async (file: File | null, displayName: string) => {
+    try {
+      setIsProcessing(true);
+      setProgress(0);
+      setCurrentFile(file);
+      setExtractedText('');
+      setAiAnalysis(null);
+      setProcessingSteps([]);
+
+      // Initialize processing steps
+      const steps: ProcessingStep[] = file ? [
+        { id: 'validate', title: 'Validating File', status: 'pending' },
+        { id: 'extract', title: 'Extracting Text', status: 'pending' },
+        { id: 'upload', title: 'Uploading File', status: 'pending' },
+        { id: 'ai', title: 'AI Analysis', status: 'pending' },
+        { id: 'save', title: 'Saving Results', status: 'pending' }
+      ] : [
+        { id: 'validate', title: 'Validating Text', status: 'pending' },
+        { id: 'ai', title: 'AI Analysis', status: 'pending' },
+        { id: 'save', title: 'Saving Results', status: 'pending' }
+      ];
+      setProcessingSteps(steps);
+
+      // Step 1: Validation
+      addProcessingStep('validate', file ? 'Validating File' : 'Validating Text', 'processing', file ? 'Checking file format and size...' : 'Validating text input...');
+      await new Promise(resolve => setTimeout(resolve, 500));
+      updateProcessingStep('validate', 'completed', file ? 'File validation successful' : 'Text validation successful');
+      setProgress(file ? 10 : 20);
+
+      // Step 2: Create processing log
+      const dummyFile = file || { name: 'direct-text.txt', size: directText.length } as File;
+      const logId = await createProcessingLog(dummyFile);
+      setProgress(file ? 20 : 30);
+
+      let text = '';
+      let storagePath = '';
+
+      if (file) {
+        // Step 3: Extract text from file
+        text = await extractTextFromDocument(file);
+        setExtractedText(text);
+        setProgress(50);
+
+        // Step 4: Upload file to storage
+        storagePath = await uploadToStorage(file, logId);
+        setProgress(70);
+      } else {
+        // Use direct text input
+        text = directText;
+        setExtractedText(text);
+        setProgress(60);
+      }
+
+      // Step 5: Process with AI
+      const analysis = await processWithAI(text, displayName);
+      setAiAnalysis(analysis);
+      setProgress(90);
+
+      // Step 6: Save results to database
+      await saveToDatabase(logId, analysis, text.substring(0, 1000), storagePath);
+      setProgress(100);
+
+      toast({
+        title: "Processing Complete",
+        description: `Successfully processed ${displayName}`,
+      });
+
+      // Refresh upload history
+      await fetchUploadHistory();
+
+    } catch (error: any) {
+      console.error('Document processing error:', error);
+      toast({
+        title: "Processing Failed",
+        description: error.message || "An error occurred while processing the document",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [isAuthenticated, directText, toast, addProcessingStep, updateProcessingStep, extractTextFromDocument, uploadToStorage, processWithAI, saveToDatabase, createProcessingLog, fetchUploadHistory]);
+
+  // Drag and drop handlers
+  const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
-    if (uploading) return;
+    setIsDragOver(true);
+  }, []);
 
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    
     const files = Array.from(e.dataTransfer.files);
     if (files.length > 0) {
-      const file = files[0];
-      // Accept multiple file types now
-      const supportedTypes = [
-        'application/pdf',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'text/plain',
-        'text/csv',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'application/vnd.ms-excel'
-      ];
-      
-      if (supportedTypes.includes(file.type) || file.name.match(/\.(pdf|docx|doc|txt|csv|xlsx|xls)$/i)) {
-        handleFileUpload(file);
-      } else {
-        toast.error('Please upload a supported file type (PDF, Word, Excel, CSV, TXT)');
-      }
+      handleFileUpload(files[0]);
     }
-  }, [uploading, user?.id]);
+  }, [handleFileUpload]);
 
-  const handleFileSelection = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelection = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
-      const file = files[0];
-      // Accept multiple file types now
-      const supportedTypes = [
-        'application/pdf',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'text/plain',
-        'text/csv',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'application/vnd.ms-excel'
-      ];
-      
-      if (supportedTypes.includes(file.type) || file.name.match(/\.(pdf|docx|doc|txt|csv|xlsx|xls)$/i)) {
-        handleFileUpload(file);
-      } else {
-        toast.error('Please upload a supported file type (PDF, Word, Excel, CSV, TXT)');
-      }
+      handleFileUpload(files[0]);
     }
-  };
+  }, [handleFileUpload]);
 
+  // Status helpers
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'completed': return CheckCircle;
-      case 'processing': case 'extracting_text': case 'text_extracted': return Clock;
-      case 'error': case 'failed': return AlertCircle;
-      default: return FileText;
+      case 'completed': return <CheckCircle className="h-4 w-4 text-green-500" />;
+      case 'processing': case 'pending': return <Clock className="h-4 w-4 text-yellow-500" />;
+      case 'error': return <XCircle className="h-4 w-4 text-red-500" />;
+      default: return <Clock className="h-4 w-4 text-gray-500" />;
     }
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'completed': return 'bg-green-500';
-      case 'processing': case 'extracting_text': case 'text_extracted': return 'bg-yellow-500';
-      case 'error': case 'failed': return 'bg-red-500';
-      default: return 'bg-gray-500';
+      case 'completed': return 'text-green-600';
+      case 'processing': case 'pending': return 'text-yellow-600';
+      case 'error': return 'text-red-600';
+      default: return 'text-gray-600';
     }
   };
 
+  if (!isAuthenticated) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <Card>
+          <CardContent className="text-center py-8">
+            <AlertCircle className="h-12 w-12 text-yellow-500 mx-auto mb-4" />
+            <h3 className="text-lg font-semibold mb-2">Authentication Required</h3>
+            <p className="text-muted-foreground">Please log in to access the document processor.</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
-    <div className="container mx-auto px-4 py-8 space-y-8">
+    <div className="container mx-auto px-4 py-8 space-y-6">
       <div className="text-center">
-        <h2 className="text-3xl font-bold mb-2">Medical Document Processor</h2>
-        <p className="text-muted-foreground">Upload documents to extract and analyze medical data</p>
+        <h1 className="text-3xl font-bold">Medical Document Processor</h1>
+        <p className="text-muted-foreground mt-2">Upload documents or paste text for AI-powered medical data extraction</p>
       </div>
 
       <Tabs defaultValue="upload" className="w-full">
         <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="upload">Upload</TabsTrigger>
-          <TabsTrigger value="history">History</TabsTrigger>
-          <TabsTrigger value="analysis">Analysis</TabsTrigger>
-          <TabsTrigger value="logs">Processing Logs</TabsTrigger>
+          <TabsTrigger value="upload" className="flex items-center gap-2">
+            <Upload className="h-4 w-4" />
+            Process
+          </TabsTrigger>
+          <TabsTrigger value="history" className="flex items-center gap-2">
+            <History className="h-4 w-4" />
+            History
+          </TabsTrigger>
+          <TabsTrigger value="analysis" className="flex items-center gap-2" disabled={!aiAnalysis}>
+            <Brain className="h-4 w-4" />
+            Analysis
+          </TabsTrigger>
+          <TabsTrigger value="logs" className="flex items-center gap-2" disabled={processingSteps.length === 0}>
+            <Eye className="h-4 w-4" />
+            Logs
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="upload" className="space-y-6">
-          <Card className="border-2 border-dashed border-primary/20 hover:border-primary/40 transition-colors">
-            <CardHeader className="text-center">
-              <CardTitle className="flex items-center justify-center gap-2">
-                <Upload className="h-6 w-6" />
-                Document Upload
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                Document Processing
               </CardTitle>
               <CardDescription>
-                Drag and drop a document or click to select. Supported formats: PDF, Word, Excel, CSV, TXT
+                Upload medical documents or paste text directly for AI analysis and data extraction
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              {uploading ? (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-center gap-2">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
-                    <span className="text-sm font-medium">
-                      {processing ? 'Processing document...' : 'Uploading...'}
-                    </span>
-                  </div>
-                  <Progress value={progress} className="w-full" />
-                  {currentFile && (
-                    <div className="text-center text-sm text-muted-foreground">
-                      {currentFile.name} • {(currentFile.size / 1024 / 1024).toFixed(2)} MB
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div
-                  onDrop={handleDrop}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDragEnter={(e) => e.preventDefault()}
-                  className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-12 text-center hover:border-primary/50 transition-colors cursor-pointer"
-                  onClick={() => document.getElementById('file-upload')?.click()}
-                >
-                  <div className="flex flex-col items-center gap-4">
-                    <div className="rounded-full bg-primary/10 p-4">
-                      <Upload className="h-8 w-8 text-primary" />
-                    </div>
-                    <div>
-                      <p className="text-lg font-medium">Drop your document here</p>
-                      <p className="text-sm text-muted-foreground">
-                        PDFs, Word docs, Excel files, CSV data, text files
-                      </p>
-                    </div>
-                    <Button variant="outline" size="sm">
-                      Browse Files
+              {!isProcessing ? (
+                <>
+                  {/* Input Method Selection */}
+                  <div className="flex gap-2 mb-4">
+                    <Button
+                      variant={activeInputMethod === 'file' ? 'default' : 'outline'}
+                      onClick={() => setActiveInputMethod('file')}
+                      className="flex items-center gap-2"
+                    >
+                      <Upload className="h-4 w-4" />
+                      Upload File
+                    </Button>
+                    <Button
+                      variant={activeInputMethod === 'text' ? 'default' : 'outline'}
+                      onClick={() => setActiveInputMethod('text')}
+                      className="flex items-center gap-2"
+                    >
+                      <Type className="h-4 w-4" />
+                      Paste Text
                     </Button>
                   </div>
-                  <input
-                    id="file-upload"
-                    type="file"
-                    accept=".pdf,.docx,.doc,.txt,.csv,.xlsx,.xls"
-                    onChange={handleFileSelection}
-                    disabled={uploading}
-                    className="hidden"
-                  />
+
+                  {activeInputMethod === 'file' ? (
+                    /* File Upload Area */
+                    <div
+                      className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+                        isDragOver 
+                          ? 'border-primary bg-primary/5' 
+                          : 'border-border hover:border-primary/50'
+                      }`}
+                      onDragOver={handleDragOver}
+                      onDragLeave={handleDragLeave}
+                      onDrop={handleDrop}
+                    >
+                      <div className="flex flex-col items-center gap-4">
+                        <div className="p-4 rounded-full bg-muted">
+                          <Upload className="h-8 w-8 text-muted-foreground" />
+                        </div>
+                        <div>
+                          <h3 className="text-lg font-semibold mb-2">Upload Medical Document</h3>
+                          <p className="text-muted-foreground mb-4">
+                            Drag and drop your file here, or click to browse
+                          </p>
+                          <div className="flex flex-wrap gap-2 justify-center text-sm text-muted-foreground">
+                            <Badge variant="secondary">PDF</Badge>
+                            <Badge variant="secondary">DOCX</Badge>
+                            <Badge variant="secondary">TXT</Badge>
+                            <Badge variant="secondary">CSV</Badge>
+                            <Badge variant="secondary">XLSX</Badge>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Input
+                            type="file"
+                            className="hidden"
+                            id="file-upload"
+                            accept=".pdf,.docx,.doc,.txt,.csv,.xlsx,.xls"
+                            onChange={handleFileSelection}
+                            disabled={isProcessing}
+                          />
+                          <Button 
+                            onClick={() => document.getElementById('file-upload')?.click()}
+                            disabled={isProcessing}
+                          >
+                            Choose File
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    /* Text Input Area */
+                    <div className="space-y-4">
+                      <div>
+                        <label htmlFor="direct-text" className="block text-sm font-medium mb-2">
+                          Paste Medical Text Content
+                        </label>
+                        <Textarea
+                          id="direct-text"
+                          placeholder="Paste your medical document text here (lab results, medical reports, etc.)..."
+                          value={directText}
+                          onChange={(e) => setDirectText(e.target.value)}
+                          className="min-h-[200px] resize-none"
+                          maxLength={50000}
+                        />
+                        <div className="flex justify-between mt-2 text-sm text-muted-foreground">
+                          <span>Characters: {directText.length.toLocaleString()} / 50,000</span>
+                          <span>Words: {directText.trim() ? directText.trim().split(/\s+/).length.toLocaleString() : 0}</span>
+                        </div>
+                      </div>
+                      <Button 
+                        onClick={handleTextProcess}
+                        disabled={!directText.trim() || isProcessing}
+                        className="w-full"
+                      >
+                        <Brain className="h-4 w-4 mr-2" />
+                        Process Text with AI
+                      </Button>
+                    </div>
+                  )}
+                </>
+              ) : (
+                /* Processing Status */
+                <div className="space-y-4">
+                  <div className="text-center">
+                    <Loader2 className="h-8 w-8 animate-spin mx-auto mb-2" />
+                    <h3 className="text-lg font-semibold">Processing {currentFile?.name || 'Text Input'}</h3>
+                    <p className="text-muted-foreground">Please wait while we analyze your document...</p>
+                  </div>
+                  
+                  <Progress value={progress} className="w-full" />
+                  
+                  {/* Processing Steps */}
+                  <div className="space-y-2">
+                    {processingSteps.map((step) => (
+                      <div key={step.id} className="flex items-center gap-3 p-3 rounded-lg bg-muted/30">
+                        <div className="flex-shrink-0">
+                          {getStatusIcon(step.status)}
+                        </div>
+                        <div className="flex-1">
+                          <div className="font-medium">{step.title}</div>
+                          {step.message && (
+                            <div className={`text-sm ${getStatusColor(step.status)}`}>
+                              {step.message}
+                            </div>
+                          )}
+                        </div>
+                        {step.status === 'processing' && (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Extracted Text Preview */}
+              {extractedText && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <FileText className="h-5 w-5" />
+                      Extracted Text Preview
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ScrollArea className="h-40">
+                      <pre className="text-sm whitespace-pre-wrap">{extractedText.substring(0, 2000)}...</pre>
+                    </ScrollArea>
+                  </CardContent>
+                </Card>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="history" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <History className="h-5 w-5" />
+                Processing History
+              </CardTitle>
+              <CardDescription>
+                View your previously processed documents
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {uploadHistory.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>No documents processed yet</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {uploadHistory.map((log) => (
+                    <div key={log.id} className="border rounded-lg p-4 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-semibold">{log.filename}</h4>
+                        <Badge variant={log.processing_status === 'completed' ? 'default' : 'secondary'}>
+                          {log.processing_status}
+                        </Badge>
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        Size: {(log.file_size / 1024).toFixed(1)} KB • 
+                        Processed: {new Date(log.created_at).toLocaleDateString()}
+                        {log.confidence_score && ` • Confidence: ${Math.round(log.confidence_score * 100)}%`}
+                      </div>
+                      {log.extracted_text_preview && (
+                        <div className="text-sm bg-muted p-2 rounded">
+                          {log.extracted_text_preview}...
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
               )}
             </CardContent>
           </Card>
+        </TabsContent>
 
-          {extractedText && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="h-5 w-5" />
-                  Extracted Text Preview
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ScrollArea className="h-64 w-full border rounded p-4">
-                  <pre className="whitespace-pre-wrap text-sm">
-                    {extractedText.substring(0, 2000)}
-                    {extractedText.length > 2000 && '...'}
-                  </pre>
-                </ScrollArea>
-              </CardContent>
-            </Card>
-          )}
-
-          {aiAnalysis && (
+        <TabsContent value="analysis" className="space-y-6">
+          {aiAnalysis ? (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Brain className="h-5 w-5" />
                   AI Analysis Results
-                  <Badge variant="secondary">{Math.round(aiAnalysis.confidence * 100)}% confidence</Badge>
                 </CardTitle>
+                <CardDescription>
+                  Structured medical data extracted from your document
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div>
-                  <h4 className="font-medium mb-2">Document Type</h4>
-                  <Badge variant="outline">{aiAnalysis.documentType}</Badge>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="font-medium">Document Type</label>
+                    <p className="text-muted-foreground">{aiAnalysis.documentType}</p>
+                  </div>
+                  <div>
+                    <label className="font-medium">Confidence Score</label>
+                    <p className="text-muted-foreground">{Math.round(aiAnalysis.confidence * 100)}%</p>
+                  </div>
                 </div>
-                
-                <div>
-                  <h4 className="font-medium mb-2">Extracted Medical Data</h4>
-                  <ScrollArea className="h-48 w-full border rounded p-4">
-                    <pre className="text-xs">
-                      {JSON.stringify(aiAnalysis.extractedFields, null, 2)}
-                    </pre>
-                  </ScrollArea>
-                </div>
-                
+
+                {Object.keys(aiAnalysis.extractedFields).length > 0 && (
+                  <div>
+                    <label className="font-medium">Extracted Data</label>
+                    <ScrollArea className="h-60 mt-2">
+                      <pre className="text-sm bg-muted p-4 rounded">
+                        {JSON.stringify(aiAnalysis.extractedFields, null, 2)}
+                      </pre>
+                    </ScrollArea>
+                  </div>
+                )}
+
                 {aiAnalysis.recommendations.length > 0 && (
                   <div>
-                    <h4 className="font-medium mb-2">Recommendations</h4>
-                    <ul className="space-y-1">
+                    <label className="font-medium">Recommendations</label>
+                    <ul className="mt-2 space-y-1">
                       {aiAnalysis.recommendations.map((rec, index) => (
-                        <li key={`recommendation-${index}`} className="text-sm text-muted-foreground">
-                          • {rec}
-                        </li>
+                        <li key={index} className="text-sm text-muted-foreground">• {rec}</li>
                       ))}
                     </ul>
                   </div>
                 )}
               </CardContent>
             </Card>
-          )}
-        </TabsContent>
-
-        <TabsContent value="history" className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold">Upload History</h3>
-            <Button onClick={fetchUploadHistory} variant="outline" size="sm" className="gap-2">
-              <RefreshCw className="h-4 w-4" />
-              Refresh
-            </Button>
-          </div>
-
-          <div className="space-y-4">
-            {uploadHistory.length === 0 ? (
-              <div className="text-center py-8">
-                <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <p className="text-muted-foreground">No documents uploaded yet</p>
-              </div>
-            ) : (
-              uploadHistory.map((log, index) => {
-                const StatusIcon = getStatusIcon(log.processing_status);
-                return (
-                  <Card key={`${log.id}-${index}`} className="shadow-card-custom">
-                    <CardContent className="p-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <StatusIcon className="h-5 w-5 text-muted-foreground" />
-                          <div>
-                            <p className="font-medium">{log.filename}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {new Date(log.created_at).toLocaleDateString()} • {(log.file_size / 1024 / 1024).toFixed(2)} MB
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className={`w-2 h-2 rounded-full ${getStatusColor(log.processing_status)}`} />
-                          <Badge variant="outline" className="text-xs">
-                            {log.processing_status}
-                          </Badge>
-                          {log.confidence_score && (
-                            <Badge variant="secondary" className="text-xs">
-                              {Math.round(log.confidence_score * 100)}%
-                            </Badge>
-                          )}
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setSelectedLog(log)}
-                          >
-                            <Eye className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })
-            )}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="analysis">
-          {selectedLog ? (
-            <Card className="shadow-medical">
-              <CardHeader>
-                <CardTitle>{selectedLog.filename} - Analysis Details</CardTitle>
-                <CardDescription>
-                  Processed on {new Date(selectedLog.created_at).toLocaleDateString()}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {selectedLog.extracted_text_preview && (
-                  <div>
-                    <h4 className="font-medium mb-2">Extracted Text Preview</h4>
-                    <ScrollArea className="h-32 w-full border rounded p-4">
-                      <pre className="text-xs whitespace-pre-wrap">
-                        {selectedLog.extracted_text_preview}
-                      </pre>
-                    </ScrollArea>
-                  </div>
-                )}
-                
-                {selectedLog.ai_structured_data && (
-                  <div>
-                    <h4 className="font-medium mb-2">Structured Data</h4>
-                    <ScrollArea className="h-64 w-full border rounded p-4">
-                      <pre className="text-xs">
-                        {JSON.stringify(selectedLog.ai_structured_data, null, 2)}
-                      </pre>
-                    </ScrollArea>
-                  </div>
-                )}
+          ) : (
+            <Card>
+              <CardContent className="text-center py-8">
+                <Brain className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-muted-foreground">No analysis results available. Process a document first.</p>
               </CardContent>
             </Card>
-          ) : (
-            <div className="text-center py-8">
-              <Brain className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">
-                Select a document from the history to view analysis details
-              </p>
-            </div>
           )}
         </TabsContent>
 
         <TabsContent value="logs" className="space-y-6">
-          <Card className="shadow-medical">
+          <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Brain className="h-5 w-5" />
-                Detailed Processing Logs
+                <Eye className="h-5 w-5" />
+                Processing Logs
               </CardTitle>
               <CardDescription>
-                Real-time step-by-step processing information
+                Detailed processing steps and status information
               </CardDescription>
             </CardHeader>
             <CardContent>
               {processingSteps.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
-                  <Clock className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                  <p>No processing logs yet. Upload a document to see detailed logs.</p>
+                  <Eye className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>No processing logs available</p>
                 </div>
               ) : (
-                <ScrollArea className="h-96 w-full">
+                <ScrollArea className="h-96">
                   <div className="space-y-4">
-                    {processingSteps.map((step, index) => (
-                      <div key={`${step.type}-${step.timestamp}-${index}`} className="border rounded-lg p-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            {step.status === 'completed' ? (
-                              <CheckCircle className="h-4 w-4 text-green-500" />
-                            ) : step.status === 'error' ? (
-                              <AlertCircle className="h-4 w-4 text-red-500" />
-                            ) : (
-                              <Clock className="h-4 w-4 text-blue-500 animate-spin" />
-                            )}
-                            <span className="font-medium">{step.type}</span>
-                            <Badge variant={
-                              step.status === 'completed' ? 'default' :
-                              step.status === 'error' ? 'destructive' : 'secondary'
-                            }>
-                              {step.status}
-                            </Badge>
-                          </div>
-                          <span className="text-xs text-muted-foreground">
-                            {new Date(step.timestamp).toLocaleTimeString()}
-                          </span>
+                    {processingSteps.map((step) => (
+                      <div key={step.id} className="border-l-2 border-muted pl-4 pb-4">
+                        <div className="flex items-center gap-2">
+                          {getStatusIcon(step.status)}
+                          <span className="font-medium">{step.title}</span>
+                          {step.timestamp && (
+                            <span className="text-xs text-muted-foreground">
+                              {step.timestamp.toLocaleTimeString()}
+                            </span>
+                          )}
                         </div>
-                        <p className="text-sm text-muted-foreground mb-2">{step.message}</p>
-                        {step.details && (
-                          <details className="text-xs">
-                            <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
-                              Show Details
-                            </summary>
-                            <pre className="mt-2 p-2 bg-muted rounded overflow-auto">
-                              {JSON.stringify(step.details, null, 2)}
-                            </pre>
-                          </details>
+                        {step.message && (
+                          <p className={`text-sm mt-1 ${getStatusColor(step.status)}`}>
+                            {step.message}
+                          </p>
                         )}
                       </div>
                     ))}
