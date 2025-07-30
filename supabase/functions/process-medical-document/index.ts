@@ -44,22 +44,29 @@ serve(async (req) => {
       throw new Error('Azure OpenAI configuration missing');
     }
 
-    // Create comprehensive medical document analysis prompt
-    const systemPrompt = `You are a medical document analysis AI that extracts structured data from medical documents. 
+    // Enhanced medical data extraction prompt
+    const systemPrompt = `You are a medical data extraction specialist. Analyze the provided medical document text and extract structured data that can be mapped to specific database tables.
 
-Your task is to analyze medical documents and extract structured data that can be stored in a health database.
+CRITICAL INSTRUCTIONS:
+1. Extract data with high confidence only - flag uncertain information
+2. Preserve original values and units exactly as written
+3. Include timestamps/dates for all measurements
+4. Identify document type first (lab report, imaging, prescription, etc.)
+5. Map extracted data to the appropriate database table structure
 
-Available database tables and their key fields:
-1. PATIENTS: first_name, last_name, date_of_birth, gender, phone_primary, email, address
-2. LAB_TESTS: test_name, test_category, order_date, collection_date, result_date, ordering_physician
-3. LAB_RESULTS: result_name, numeric_value, text_value, units, reference_range_min, reference_range_max, abnormal_flag
-4. IMAGING_STUDIES: study_type, study_date, body_part, findings, impression, radiologist
-5. CARDIOVASCULAR_TESTS: test_type, test_date, heart_rate, blood_pressure, ecg_interpretation
-6. ALLERGIES: allergen, reaction, severity, onset_date
-7. ACTIVITY_METRICS: measurement_date, steps_count, total_calories, exercise_minutes
-8. HEART_METRICS: measurement_timestamp, resting_heart_rate, max_heart_rate, hrv_score
-9. SLEEP_METRICS: sleep_date, total_sleep_time, deep_sleep_minutes, sleep_score
-10. NUTRITION_METRICS: measurement_date, total_calories, protein_grams, carbohydrates_grams
+AVAILABLE DATABASE TABLES TO MAP TO:
+- patients: Demographics, contact info, insurance (first_name, last_name, date_of_birth, gender, phone_primary, email, address_line1, medical_record_number, insurance_provider)
+- lab_tests + lab_results: Blood work, urine tests, all lab values (test_name, test_category, order_date, collection_date, result_date, ordering_physician, performing_lab)
+- lab_results: (result_name, numeric_value, text_value, units, reference_range_min, reference_range_max, abnormal_flag, result_status)
+- imaging_studies: X-rays, CT, MRI, ultrasound reports (study_type, study_date, body_part, findings, impression, radiologist, performing_facility)
+- cardiovascular_tests: ECG, stress tests, heart procedures (test_type, test_date, heart_rate, max_heart_rate, blood_pressure_peak, ecg_interpretation, performing_physician)
+- allergies: Allergic reactions and sensitivities (allergen, reaction, severity, onset_date, active)
+- heart_metrics: Heart rate, blood pressure, HRV data (measurement_timestamp, resting_heart_rate, max_heart_rate, hrv_score, systolic_bp, diastolic_bp, vo2_max)
+- activity_metrics: Exercise, steps, calorie data (measurement_date, measurement_timestamp, steps_count, total_calories, exercise_minutes, distance_walked_meters, active_calories)
+- sleep_metrics: Sleep studies, sleep quality data (sleep_date, total_sleep_time, deep_sleep_minutes, rem_sleep_minutes, light_sleep_minutes, sleep_score, sleep_efficiency)
+- nutrition_metrics: Dietary analysis, vitamin levels (measurement_date, total_calories, protein_grams, carbohydrates_grams, fat_grams, fiber_grams, vitamin_d_iu, vitamin_b12_mcg)
+- microbiome_metrics: Gut health test results (test_date, alpha_diversity, beta_diversity, beneficial_bacteria_score, pathogenic_bacteria_score, butyrate_production, test_provider)
+- environmental_metrics: Exposure data, environmental factors (measurement_date, measurement_timestamp, air_quality_index, uv_exposure_minutes, temperature_deviation)
 
 RESPONSE FORMAT:
 Return a JSON object with exactly this structure:
@@ -85,55 +92,47 @@ Return a JSON object with exactly this structure:
       "measurement_timestamp": "2025-07-26",
       "resting_heart_rate": 58,
       "hrv_score": 65
-    },
-    "SLEEP_METRICS": {
-      "sleep_date": "2025-07-26",
-      "total_sleep_time": 8,
-      "deep_sleep_minutes": 72,
-      "sleep_score": 91
     }
   },
   "recommendations": ["suggestion1", "suggestion2"]
 }
 
-CRITICAL EXTRACTION RULES:
-1. For multiple lab results, create separate entries: LAB_RESULTS, LAB_RESULTS_2, LAB_RESULTS_3, etc.
-2. Extract numeric values without units - store units separately
-3. For dates, use YYYY-MM-DD format
-4. Use null for missing values
-5. For sleep times in hours, convert to total minutes (e.g., 8 hours = 480 minutes)
-6. For heart metrics, extract HRV in milliseconds if available
-7. Match field names exactly to database schema
-8. Patient demographics go in PATIENTS table
-9. Physiological biomarkers map to HEART_METRICS, SLEEP_METRICS, ACTIVITY_METRICS
-10. Blood test results go in LAB_RESULTS (multiple entries for multiple tests)
+SPECIFIC EXTRACTION RULES:
+- Lab Results: Extract test names, values, units, reference ranges, abnormal flags exactly as written
+- Imaging: Extract study type, findings, impressions, radiologist notes
+- Vitals: Map heart rate to heart_metrics, blood pressure to cardiovascular_tests or heart_metrics
+- Medications: Note any drug allergies for allergies table  
+- Patient Info: Update patient demographics if found
+- Dates: Always extract test dates, collection dates, report dates in YYYY-MM-DD format
+- Physicians: Capture ordering and reviewing physician names
+- Labs: Extract performing laboratory information
+- Reference Ranges: Parse "10-40 U/L" as min: 10, max: 40, units: "U/L"
+- Multiple Values: Create separate entries for each lab result (LAB_RESULTS_1, LAB_RESULTS_2, etc.)
+- Confidence Scoring: Only extract data with >0.8 confidence, flag uncertain data for review
+- Preserve Units: Keep original units exactly as written in document
+- Biomarker Data: Map physiological data to appropriate metrics tables (heart, sleep, activity, etc.)
 
-EXAMPLES OF GOOD EXTRACTIONS:
-- "Hemoglobin: 14.5 g/dL" → LAB_RESULTS: {"result_name": "Hemoglobin", "numeric_value": 14.5, "units": "g/dL"}
-- "RBC Count: 4.8 million/uL" → LAB_RESULTS_2: {"result_name": "RBC Count", "numeric_value": 4.8, "units": "million/uL"}
-- "Resting Heart Rate: 58 bpm" → HEART_METRICS: {"resting_heart_rate": 58}
-- "Sleep Efficiency: 91%" → SLEEP_METRICS: {"sleep_score": 91}
-- "Deep Sleep: 1.2 hours" → SLEEP_METRICS: {"deep_sleep_minutes": 72}
+Be thorough and extract ALL available data points that match the schema with high confidence.`;
 
-Be thorough and extract ALL available data points that match the schema.`;
-
-    const userPrompt = `Analyze this medical document and extract structured data:
+    const userPrompt = `Analyze this medical document and extract structured data according to the medical data extraction protocol:
 
 FILENAME: ${filename}
-
 DOCUMENT TEXT:
 ${documentText}
 
-Extract all relevant medical data that matches the database schema. Focus on:
-- Patient demographics if present
-- Lab test results with values and reference ranges
-- Imaging study findings
-- Vital signs and measurements
-- Medication information
-- Allergy information
-- Any quantifiable health metrics
+EXTRACTION REQUIREMENTS:
+1. Identify document type first
+2. Extract patient demographics if present  
+3. Map all lab test results with values and reference ranges
+4. Extract vital signs and physiological measurements
+5. Capture imaging study findings if applicable
+6. Note any allergies or adverse reactions
+7. Extract physician and facility information
+8. Preserve all timestamps and dates
+9. Flag uncertain extractions for manual review
+10. Provide recommendations based on findings
 
-Return the structured JSON response as specified.`;
+Return the complete structured JSON response with confidence scoring and uncertainty flags as specified in the format above.`;
 
     console.log('📤 SENDING REQUEST TO AZURE OPENAI:');
     console.log('=====================================');
@@ -209,7 +208,7 @@ Return the structured JSON response as specified.`;
       confidence: Math.min(1.0, Math.max(0.0, parsedResult.confidence || 0.5)),
       extractedFields: parsedResult.extractedFields || {},
       recommendations: Array.isArray(parsedResult.recommendations) 
-        ? parsedResult.recommendations.slice(0, 10) // Limit recommendations
+        ? parsedResult.recommendations.slice(0, 10)
         : []
     };
 

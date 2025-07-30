@@ -190,14 +190,32 @@ const MedicalDataProcessor: React.FC = () => {
         llmResponse: JSON.stringify(data, null, 2)
       }));
 
-      addLog('AI Processing', 'success', `AI successfully extracted ${Object.keys(data.extractedFields || {}).length} data entities`, {
-        documentType: data.documentType,
-        confidence: data.confidence,
-        extractedFields: data.extractedFields,
-        recommendations: data.recommendations
+      console.log('Full AI response data:', data);
+
+      // Handle both old and new response formats
+      const extractedFields = data.extractedFields || {};
+      const documentType = data.documentType || data.document_type || 'unknown';
+      const confidence = data.confidence || data.confidence_score || 0.0;
+      const recommendations = data.recommendations || [];
+      const uncertainData = data.uncertainData || data.uncertain_data || [];
+      const patientData = data.patientData || data.patient_data || {};
+
+      addLog('AI Processing', 'success', `AI analysis completed: ${documentType} (${Math.round(confidence * 100)}% confidence)`, {
+        documentType,
+        confidence,
+        fieldsExtracted: Object.keys(extractedFields).length,
+        uncertainDataPoints: uncertainData.length,
+        recommendations: recommendations.length
       });
 
-      return data.extractedFields || {};
+      return {
+        documentType,
+        confidence,
+        extractedFields,
+        recommendations,
+        uncertainData,
+        patientData
+      };
     } catch (error: any) {
       console.error('AI Processing error:', error);
       addLog('AI Processing', 'error', `AI processing failed: ${error.message}`, { error: error.toString() });
@@ -263,39 +281,21 @@ const MedicalDataProcessor: React.FC = () => {
     let patientId: string | null = null;
 
     // Define valid columns for each table to filter out invalid fields
+    // Define valid columns for each table to filter out invalid fields
     const validColumns = {
-      patients: [
-        'first_name', 'last_name', 'date_of_birth', 'gender', 'phone_primary', 'phone_secondary',
-        'email', 'address_line1', 'address_line2', 'city', 'state', 'zip_code', 'country',
-        'emergency_contact_name', 'emergency_contact_phone', 'emergency_contact_relationship',
-        'medical_record_number', 'primary_care_physician', 'insurance_provider',
-        'insurance_policy_number', 'insurance_group_number', 'race_ethnicity', 'user_id'
-      ],
-      lab_results: [
-        'result_name', 'numeric_value', 'text_value', 'units', 'reference_range_min',
-        'reference_range_max', 'reference_range_text', 'abnormal_flag', 'result_status',
-        'interpretation', 'reviewing_physician', 'lab_test_id'
-      ],
-      heart_metrics: [
-        'measurement_timestamp', 'device_type', 'resting_heart_rate', 'average_heart_rate',
-        'max_heart_rate', 'min_heart_rate', 'walking_heart_rate', 'workout_heart_rate',
-        'recovery_heart_rate', 'hrv_score', 'hrv_rmssd', 'hrv_sdnn', 'vo2_max',
-        'measurement_context', 'data_source', 'user_id'
-      ],
-      sleep_metrics: [
-        'sleep_date', 'device_type', 'bedtime', 'sleep_start', 'sleep_end', 'wake_time',
-        'total_sleep_time', 'time_in_bed', 'sleep_efficiency', 'sleep_latency',
-        'rem_sleep_minutes', 'deep_sleep_minutes', 'light_sleep_minutes', 'awake_minutes',
-        'sleep_score', 'restfulness_score', 'sleep_disturbances', 'sleep_debt',
-        'data_source', 'user_id'
-      ],
-      activity_metrics: [
-        'measurement_date', 'measurement_timestamp', 'device_type', 'steps_count',
-        'distance_walked_meters', 'distance_ran_meters', 'distance_cycled_meters',
-        'flights_climbed', 'total_calories', 'active_calories', 'basal_calories',
-        'exercise_minutes', 'moderate_activity_minutes', 'vigorous_activity_minutes',
-        'data_source', 'user_id'
-      ]
+      patients: ['first_name', 'last_name', 'date_of_birth', 'gender', 'phone_primary', 'email', 'address_line1', 'address_line2', 'city', 'state', 'zip_code', 'medical_record_number', 'insurance_provider', 'insurance_policy_number', 'emergency_contact_name', 'emergency_contact_phone'],
+      lab_results: ['result_name', 'numeric_value', 'text_value', 'units', 'reference_range_min', 'reference_range_max', 'abnormal_flag', 'result_status', 'interpretation'],
+      lab_tests: ['test_name', 'test_category', 'order_date', 'collection_date', 'result_date', 'ordering_physician', 'performing_lab', 'test_code', 'specimen_type', 'priority', 'patient_id'],
+      heart_metrics: ['measurement_timestamp', 'resting_heart_rate', 'max_heart_rate', 'min_heart_rate', 'average_heart_rate', 'hrv_score', 'hrv_rmssd', 'hrv_sdnn', 'systolic_bp', 'diastolic_bp', 'vo2_max', 'workout_heart_rate', 'device_type', 'user_id'],
+      sleep_metrics: ['sleep_date', 'total_sleep_time', 'deep_sleep_minutes', 'rem_sleep_minutes', 'light_sleep_minutes', 'awake_minutes', 'sleep_efficiency', 'sleep_latency', 'sleep_score', 'sleep_disturbances', 'device_type', 'user_id'],
+      activity_metrics: ['measurement_date', 'measurement_timestamp', 'steps_count', 'distance_walked_meters', 'distance_ran_meters', 'distance_cycled_meters', 'total_calories', 'active_calories', 'basal_calories', 'exercise_minutes', 'moderate_activity_minutes', 'vigorous_activity_minutes', 'device_type', 'user_id'],
+      cardiovascular_tests: ['test_type', 'test_date', 'heart_rate', 'max_heart_rate', 'target_heart_rate', 'blood_pressure_peak', 'ecg_interpretation', 'rhythm', 'pr_interval', 'qrs_duration', 'qt_interval', 'qtc_interval', 'performing_physician', 'performing_facility', 'patient_id'],
+      imaging_studies: ['study_type', 'study_subtype', 'study_date', 'body_part', 'contrast_used', 'contrast_type', 'findings', 'impression', 'radiologist', 'ordering_physician', 'performing_facility', 'patient_id'],
+      allergies: ['allergen', 'reaction', 'severity', 'onset_date', 'active', 'notes', 'patient_id'],
+      nutrition_metrics: ['measurement_date', 'total_calories', 'protein_grams', 'carbohydrates_grams', 'fat_grams', 'fiber_grams', 'sugar_grams', 'sodium_mg', 'calcium_mg', 'iron_mg', 'vitamin_d_iu', 'vitamin_b12_mcg', 'vitamin_c_mg', 'user_id'],
+      microbiome_metrics: ['test_date', 'sample_collection_date', 'alpha_diversity', 'beta_diversity', 'species_richness', 'beneficial_bacteria_score', 'pathogenic_bacteria_score', 'butyrate_production', 'acetate_production', 'propionate_production', 'test_provider', 'user_id'],
+      environmental_metrics: ['measurement_date', 'measurement_timestamp', 'air_quality_index', 'pm25_level', 'pm10_level', 'uv_exposure_minutes', 'temperature_deviation', 'humidity_percentage', 'barometric_pressure', 'device_type', 'user_id'],
+      recovery_strain_metrics: ['measurement_date', 'recovery_score', 'strain_score', 'stress_score', 'hrv_score', 'resting_hr_score', 'sleep_performance_score', 'skin_temperature', 'skin_temperature_deviation', 'device_type', 'user_id']
     };
 
     // Helper function to filter and map data to valid columns
@@ -316,6 +316,8 @@ const MedicalDataProcessor: React.FC = () => {
     };
 
     try {
+      let patientId: string | null = null;
+
       // Step 1: Create patient record if patient data exists
       if (extractedData.PATIENTS) {
         addLog('Database Mapping', 'processing', 'Creating patient record...');
@@ -323,9 +325,15 @@ const MedicalDataProcessor: React.FC = () => {
         const patientData = filterValidFields(extractedData.PATIENTS, 'patients');
         patientData.user_id = (await supabase.auth.getUser()).data.user?.id;
         
-        // Ensure required fields have defaults
+        // Ensure required fields have defaults if missing
+        if (!patientData.first_name) {
+          patientData.first_name = extractedData.PATIENTS.name?.split(' ')[0] || 'Unknown';
+        }
+        if (!patientData.last_name) {
+          patientData.last_name = extractedData.PATIENTS.name?.split(' ').slice(1).join(' ') || 'Patient';
+        }
         if (!patientData.date_of_birth) {
-          patientData.date_of_birth = '1990-01-01';
+          patientData.date_of_birth = extractedData.PATIENTS.date_of_birth || '1990-01-01';
         }
 
         const { data: patient, error } = await supabase
@@ -338,16 +346,50 @@ const MedicalDataProcessor: React.FC = () => {
           addLog('Database Mapping', 'warning', `Patient creation failed: ${error.message}. Continuing with other data.`);
         } else {
           patientId = patient.id;
-          savedRecords.push({ table: 'patients', data: patient });
-          addLog('Database Mapping', 'success', 'Patient record created successfully', patient);
+          savedRecords.push({ table: 'patients', data: patient, confidence: 0.95 });
+          addLog('Database Mapping', 'success', `Patient record created: ${patient.first_name} ${patient.last_name}`, patient);
         }
       }
 
-      // Step 2: Process lab results
+      // Step 2: Extract lab results
       const labResults = Object.entries(extractedData).filter(([key]) => 
         key.startsWith('LAB_RESULTS')
       );
 
+      // Step 3: Create lab test record if needed
+      let labTestId: string | null = null;
+      if (extractedData.LAB_TESTS || labResults.length > 0) {
+        addLog('Database Mapping', 'processing', 'Creating lab test record...');
+        
+        const labTestData = extractedData.LAB_TESTS ? filterValidFields(extractedData.LAB_TESTS, 'lab_tests') : {
+          test_name: 'Comprehensive Lab Panel',
+          test_category: 'Laboratory',
+          order_date: new Date().toISOString().split('T')[0],
+          test_status: 'completed'
+        };
+
+        if (patientId) {
+          labTestData.patient_id = patientId;
+        }
+
+        try {
+          const { data: labTest, error } = await supabase
+            .from('lab_tests')
+            .insert(labTestData)
+            .select()
+            .single();
+
+          if (!error && labTest) {
+            labTestId = labTest.id;
+            savedRecords.push({ table: 'lab_tests', data: labTest, confidence: 0.90 });
+            addLog('Database Mapping', 'success', `Lab test record created: ${labTest.test_name}`, labTest);
+          }
+        } catch (error: any) {
+          addLog('Database Mapping', 'warning', `Lab test creation failed: ${error.message}`);
+        }
+      }
+
+      // Step 4: Process lab results
       if (labResults.length > 0) {
         addLog('Database Mapping', 'processing', `Processing ${labResults.length} lab results...`);
 
@@ -355,11 +397,18 @@ const MedicalDataProcessor: React.FC = () => {
           try {
             const labData = filterValidFields(data, 'lab_results');
             
+            // Ensure required fields
+            if (!labData.result_name) {
+              addLog('Database Mapping', 'warning', `Skipping lab result - missing result_name: ${JSON.stringify(data)}`);
+              continue;
+            }
+            
             const { data: result, error } = await supabase
               .from('lab_results')
               .insert({
                 ...labData,
-                lab_test_id: null, // Will be linked later if needed
+                lab_test_id: labTestId,
+                result_status: labData.result_status || 'final',
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString()
               })
@@ -371,15 +420,15 @@ const MedicalDataProcessor: React.FC = () => {
               continue;
             }
 
-            savedRecords.push({ table: 'lab_results', data: result });
-            addLog('Database Mapping', 'success', `Lab result saved: ${data.result_name}`, result);
+            savedRecords.push({ table: 'lab_results', data: result, confidence: 0.92 });
+            addLog('Database Mapping', 'success', `Lab result saved: ${data.result_name} = ${data.numeric_value || data.text_value} ${data.units || ''}`, result);
           } catch (error: any) {
             addLog('Database Mapping', 'error', `Failed to save lab result ${data.result_name}: ${error.message}`);
           }
         }
       }
 
-      // Step 3: Process heart metrics
+      // Step 5: Process heart metrics
       if (extractedData.HEART_METRICS) {
         addLog('Database Mapping', 'processing', 'Processing heart metrics...');
         
@@ -521,20 +570,15 @@ const MedicalDataProcessor: React.FC = () => {
 
       // Step 2: Process with AI
       updateProcessingStep(2, 'Processing with AI to extract medical data...');
-      let extractedData: ExtractedData;
+      let aiResponse: any;
       try {
-        extractedData = await processWithAI(text);
-        console.log('Extracted data received:', extractedData);
+        aiResponse = await processWithAI(text);
+        console.log('Extracted AI response received:', aiResponse);
         
         // Update processing state with extracted data
         setProcessing(prev => ({ 
           ...prev, 
-          extractedData: {
-            documentType: 'lab_report',
-            confidence: 0.95,
-            extractedFields: extractedData,
-            recommendations: []
-          }
+          extractedData: aiResponse
         }));
         
       } catch (aiError: any) {
@@ -545,7 +589,7 @@ const MedicalDataProcessor: React.FC = () => {
       // Step 3: Check for duplicates (unless forced)
       if (!forceOverwrite) {
         updateProcessingStep(3, 'Checking for duplicate data...');
-        const { hasDuplicates, duplicateDetails } = await checkForDuplicates(extractedData, text);
+        const { hasDuplicates, duplicateDetails } = await checkForDuplicates(aiResponse.extractedFields || {}, text);
         
         if (hasDuplicates) {
           const duplicateMessages = duplicateDetails.map(d => d.message).join('\n');
@@ -571,19 +615,14 @@ const MedicalDataProcessor: React.FC = () => {
 
       // Step 4: Map and save to database
       updateProcessingStep(4, 'Mapping data to database schema...');
-      const savedRecords = await mapAndSaveToDatabase(extractedData);
+      const savedRecords = await mapAndSaveToDatabase(aiResponse.extractedFields || {});
 
       // Step 5: Complete
       updateProcessingStep(5, 'Processing complete!');
       
       setProcessing(prev => ({
         ...prev,
-        extractedData: {
-          documentType: 'lab_report',
-          confidence: 0.95,
-          extractedFields: extractedData,
-          recommendations: []
-        },
+        extractedData: aiResponse,
         savedRecords,
         isProcessing: false,
         step: 5
