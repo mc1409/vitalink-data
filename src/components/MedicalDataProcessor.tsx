@@ -336,6 +336,12 @@ const MedicalDataProcessor: React.FC = () => {
           patientData.date_of_birth = extractedData.PATIENTS.date_of_birth || '1990-01-01';
         }
 
+        addLog('Database Mapping', 'info', `Building query for patients table:`, { 
+          table: 'patients',
+          query: patientData,
+          sql: `INSERT INTO patients (${Object.keys(patientData).join(', ')}) VALUES (${Object.keys(patientData).map(() => '?').join(', ')})`
+        });
+
         const { data: patient, error } = await supabase
           .from('patients')
           .insert(patientData)
@@ -343,11 +349,15 @@ const MedicalDataProcessor: React.FC = () => {
           .single();
 
         if (error) {
-          addLog('Database Mapping', 'warning', `Patient creation failed: ${error.message}. Continuing with other data.`);
+          addLog('Database Mapping', 'error', `Patient database creation failed: ${error.message}`, { error, query: patientData });
         } else {
           patientId = patient.id;
           savedRecords.push({ table: 'patients', data: patient, confidence: 0.95 });
-          addLog('Database Mapping', 'success', `Patient record created: ${patient.first_name} ${patient.last_name}`, patient);
+          addLog('Database Mapping', 'success', `✅ Patient record created in database: ${patient.first_name} ${patient.last_name}`, { 
+            table: 'patients', 
+            id: patient.id, 
+            record: patient 
+          });
         }
       }
 
@@ -394,34 +404,46 @@ const MedicalDataProcessor: React.FC = () => {
         addLog('Database Mapping', 'processing', `Processing ${labResults.length} lab results...`);
 
         for (const [key, data] of labResults) {
-          try {
-            const labData = filterValidFields(data, 'lab_results');
-            
-            // Ensure required fields
-            if (!labData.result_name) {
-              addLog('Database Mapping', 'warning', `Skipping lab result - missing result_name: ${JSON.stringify(data)}`);
-              continue;
-            }
-            
-            const { data: result, error } = await supabase
-              .from('lab_results')
-              .insert({
-                ...labData,
-                lab_test_id: labTestId,
-                result_status: labData.result_status || 'final',
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
-              })
-              .select()
-              .single();
+        try {
+          const labData = filterValidFields(data, 'lab_results');
+          
+          // Ensure required fields
+          if (!labData.result_name) {
+            addLog('Database Mapping', 'warning', `Skipping lab result - missing result_name: ${JSON.stringify(data)}`);
+            continue;
+          }
+          
+          const insertQuery = {
+            ...labData,
+            lab_test_id: labTestId,
+            result_status: labData.result_status || 'final',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
 
-            if (error) {
-              addLog('Database Mapping', 'warning', `Lab result failed for ${data.result_name}: ${error.message}`);
-              continue;
-            }
+          addLog('Database Mapping', 'info', `Building query for lab_results table:`, { 
+            table: 'lab_results',
+            query: insertQuery,
+            sql: `INSERT INTO lab_results (${Object.keys(insertQuery).join(', ')}) VALUES (${Object.keys(insertQuery).map(() => '?').join(', ')})`
+          });
+          
+          const { data: result, error } = await supabase
+            .from('lab_results')
+            .insert(insertQuery)
+            .select()
+            .single();
 
-            savedRecords.push({ table: 'lab_results', data: result, confidence: 0.92 });
-            addLog('Database Mapping', 'success', `Lab result saved: ${data.result_name} = ${data.numeric_value || data.text_value} ${data.units || ''}`, result);
+          if (error) {
+            addLog('Database Mapping', 'error', `Lab result database insertion failed for ${data.result_name}: ${error.message}`, { error, query: insertQuery });
+            continue;
+          }
+
+          savedRecords.push({ table: 'lab_results', data: result, confidence: 0.92 });
+          addLog('Database Mapping', 'success', `✅ Lab result saved to database: ${data.result_name} = ${data.numeric_value || data.text_value} ${data.units || ''}`, { 
+            table: 'lab_results',
+            id: result.id,
+            record: result
+          });
           } catch (error: any) {
             addLog('Database Mapping', 'error', `Failed to save lab result ${data.result_name}: ${error.message}`);
           }
@@ -1422,14 +1444,43 @@ const MedicalDataProcessor: React.FC = () => {
                       })}
                     </div>
                     
-                    <details className="border rounded-lg p-4">
-                      <summary className="font-medium cursor-pointer">
-                        View All Saved Records ({processing.savedRecords.length})
-                      </summary>
-                      <pre className="text-xs bg-muted p-4 rounded mt-2 overflow-x-auto">
-                        {JSON.stringify(processing.savedRecords, null, 2)}
-                      </pre>
-                    </details>
+                     <details className="border rounded-lg p-4">
+                       <summary className="font-medium cursor-pointer">
+                         View Created Database Records ({processing.savedRecords.length} total)
+                       </summary>
+                       <div className="mt-4 space-y-4">
+                         {processing.savedRecords.map((record, index) => (
+                           <Card key={index} className="bg-green-50 border-green-200">
+                             <CardHeader className="pb-2">
+                               <div className="flex items-center justify-between">
+                                 <CardTitle className="text-sm font-medium">
+                                   📊 {record.table.replace(/_/g, ' ').toUpperCase()}
+                                 </CardTitle>
+                                 <Badge variant="outline" className="text-xs">
+                                   ID: {record.data.id || 'N/A'}
+                                 </Badge>
+                               </div>
+                             </CardHeader>
+                             <CardContent className="space-y-2">
+                               <div className="flex items-center gap-2 text-sm">
+                                 <span className="font-medium">Confidence:</span>
+                                 <Badge variant={record.confidence > 0.8 ? "default" : "secondary"}>
+                                   {Math.round(record.confidence * 100)}%
+                                 </Badge>
+                               </div>
+                               <div className="bg-white p-3 rounded border">
+                                 <div className="text-xs font-mono">
+                                   <strong>Created Record:</strong>
+                                   <pre className="mt-1 text-xs overflow-x-auto">
+                                     {JSON.stringify(record.data, null, 2)}
+                                   </pre>
+                                 </div>
+                               </div>
+                             </CardContent>
+                           </Card>
+                         ))}
+                       </div>
+                     </details>
                   </div>
                 ) : (
                   <p className="text-muted-foreground text-center py-8">
