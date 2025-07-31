@@ -90,7 +90,16 @@ serve(async (req) => {
     }
 
     const data = await response.json();
-    const generatedSQL = data.choices[0].message.content.trim();
+    let generatedSQL = data.choices[0].message.content.trim();
+
+    // Clean up the SQL - remove markdown code blocks if present
+    generatedSQL = generatedSQL.replace(/```sql\s*/gi, '').replace(/```\s*/g, '');
+    
+    // Remove multiple semicolons and ensure single semicolon at end
+    generatedSQL = generatedSQL.replace(/;+/g, ';');
+    if (!generatedSQL.endsWith(';')) {
+      generatedSQL += ';';
+    }
 
     // Basic validation - ensure it's a SELECT statement
     if (!generatedSQL.toLowerCase().trim().startsWith('select')) {
