@@ -5,8 +5,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, Play, Database } from 'lucide-react';
+import { Loader2, Play, Database, Wand2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { Input } from '@/components/ui/input';
 
 interface QueryResult {
   data: any[] | null;
@@ -19,6 +20,8 @@ const SQLEditor: React.FC = () => {
   const [query, setQuery] = useState('SELECT * FROM profiles LIMIT 10;');
   const [result, setResult] = useState<QueryResult | null>(null);
   const [isExecuting, setIsExecuting] = useState(false);
+  const [naturalLanguageQuery, setNaturalLanguageQuery] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const predefinedQueries = [
     {
@@ -134,6 +137,37 @@ LIMIT 10;`
     setQuery(predefinedQuery);
   };
 
+  const generateSQLFromText = async () => {
+    if (!naturalLanguageQuery.trim()) {
+      toast.error("Please enter what data you're looking for");
+      return;
+    }
+
+    setIsGenerating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('text-to-sql', {
+        body: { prompt: naturalLanguageQuery }
+      });
+
+      if (error) {
+        toast.error(`Failed to generate SQL: ${error.message}`);
+        return;
+      }
+
+      if (data?.sql) {
+        setQuery(data.sql);
+        toast.success("SQL query generated! Review and execute when ready.");
+      } else {
+        toast.error("Failed to generate SQL query");
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
+      toast.error(`Error: ${errorMessage}`);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   const renderTable = (data: any[]) => {
     if (!data || data.length === 0) {
       return <div className="text-muted-foreground text-center py-4">No data returned</div>;
@@ -200,6 +234,32 @@ LIMIT 10;`
                   {pq.name}
                 </Button>
               ))}
+            </div>
+          </div>
+
+          {/* Natural Language Query */}
+          <div>
+            <label className="text-sm font-medium mb-2 block">Or describe what data you want:</label>
+            <div className="flex gap-2">
+              <Input
+                value={naturalLanguageQuery}
+                onChange={(e) => setNaturalLanguageQuery(e.target.value)}
+                placeholder="e.g., 'Show me all patients with heart rate above 100'"
+                className="flex-1"
+              />
+              <Button 
+                onClick={generateSQLFromText}
+                disabled={isGenerating || !naturalLanguageQuery.trim()}
+                variant="outline"
+                className="flex items-center gap-2"
+              >
+                {isGenerating ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Wand2 className="h-4 w-4" />
+                )}
+                {isGenerating ? 'Generating...' : 'Generate SQL'}
+              </Button>
             </div>
           </div>
 
