@@ -34,22 +34,33 @@ ORDER BY table_name;`
     },
     {
       name: "Lab Results",
-      query: "SELECT * FROM lab_results LIMIT 10;"
+      query: "SELECT result_name, numeric_value, units, abnormal_flag FROM lab_results LIMIT 10;"
     },
     {
       name: "Document Processing Logs",
       query: "SELECT filename, processing_status, ai_analysis_status, created_at FROM document_processing_logs ORDER BY created_at DESC LIMIT 10;"
     },
     {
-      name: "Recent Activity",
+      name: "Recent Activity Metrics",
       query: `SELECT 
-  'Document' as type, 
-  filename as name, 
-  processing_status as status, 
-  created_at 
-FROM document_processing_logs 
-ORDER BY created_at DESC 
+  measurement_date, 
+  device_type, 
+  steps_count, 
+  total_calories 
+FROM activity_metrics 
+ORDER BY measurement_date DESC 
 LIMIT 5;`
+    },
+    {
+      name: "Heart Metrics Summary",
+      query: `SELECT 
+  measurement_timestamp, 
+  resting_heart_rate, 
+  average_heart_rate, 
+  max_heart_rate 
+FROM heart_metrics 
+ORDER BY measurement_timestamp DESC 
+LIMIT 10;`
     }
   ];
 
@@ -76,14 +87,32 @@ LIMIT 5;`
     const startTime = Date.now();
 
     try {
-      // For now, show a message that custom SQL execution requires the migration
-      setResult({
-        data: null,
-        error: "SQL query execution requires the database migration to be approved and executed first. Please approve the migration above to enable this feature.",
-        rowCount: 0,
-        executionTime: Date.now() - startTime
+      // Execute SQL query using our secure RPC function
+      const { data, error } = await supabase.rpc('execute_sql', {
+        query_text: query
       });
-      toast.error("Migration required for SQL execution");
+
+      const executionTime = Date.now() - startTime;
+
+      if (error) {
+        setResult({
+          data: null,
+          error: error.message,
+          rowCount: 0,
+          executionTime
+        });
+        toast.error(error.message);
+      } else {
+        // The RPC function returns JSON, parse it to get the array
+        const resultData = Array.isArray(data) ? data : (data ? [data] : []);
+        setResult({
+          data: resultData,
+          error: null,
+          rowCount: resultData.length,
+          executionTime
+        });
+        toast.success(`Returned ${resultData.length} rows in ${executionTime}ms`);
+      }
     } catch (err) {
       const executionTime = Date.now() - startTime;
       const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
@@ -152,20 +181,21 @@ LIMIT 5;`
             SQL Query Editor
           </CardTitle>
           <CardDescription>
-            Execute SQL queries to explore your data. Use SELECT statements only for security.
+            Execute SQL queries to explore your data. Only SELECT statements are allowed for security.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Predefined Queries */}
           <div>
             <h4 className="text-sm font-medium mb-2">Quick Queries:</h4>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
               {predefinedQueries.map((pq, index) => (
                 <Button
                   key={index}
                   variant="outline"
                   size="sm"
                   onClick={() => loadPredefinedQuery(pq.query)}
+                  className="text-left justify-start h-auto py-2"
                 >
                   {pq.name}
                 </Button>
@@ -175,6 +205,7 @@ LIMIT 5;`
 
           {/* Query Input */}
           <div>
+            <label className="text-sm font-medium mb-2 block">SQL Query:</label>
             <Textarea
               value={query}
               onChange={(e) => setQuery(e.target.value)}
