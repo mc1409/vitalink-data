@@ -59,15 +59,27 @@ LIMIT 5;`
       return;
     }
 
+    // Basic safety check - only allow SELECT statements
+    const trimmedQuery = query.trim().toLowerCase();
+    if (!trimmedQuery.startsWith('select')) {
+      toast.error("Only SELECT queries are allowed for security reasons");
+      setResult({
+        data: null,
+        error: "Only SELECT queries are allowed for security reasons",
+        rowCount: 0,
+        executionTime: 0
+      });
+      return;
+    }
+
     setIsExecuting(true);
     const startTime = Date.now();
 
     try {
-      // Use Supabase client directly instead of RPC for safety
-      const { data, error } = await supabase
-        .from('profiles') // Safe fallback
-        .select('*')
-        .limit(1);
+      // Execute raw SQL query using Supabase RPC
+      const { data, error } = await supabase.rpc('execute_sql', {
+        query_text: query
+      });
 
       const executionTime = Date.now() - startTime;
 

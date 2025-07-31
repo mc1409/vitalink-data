@@ -17,6 +17,7 @@ import {
   LogOut
 } from 'lucide-react';
 import MedicalDataProcessor from '@/components/MedicalDataProcessor';
+import SQLEditor from '@/components/SQLEditor';
 import DatabaseDashboard from '@/components/DatabaseDashboard';
 import SimpleTableViewer from '@/components/SimpleTableViewer';
 import { useAuth } from '@/components/AuthProvider';
@@ -122,7 +123,7 @@ const Dashboard = () => {
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="overview" className="flex items-center gap-2">
               <BarChart3 className="h-4 w-4" />
               Overview
@@ -134,6 +135,10 @@ const Dashboard = () => {
             <TabsTrigger value="database" className="flex items-center gap-2">
               <Database className="h-4 w-4" />
               View Data Tables
+            </TabsTrigger>
+            <TabsTrigger value="sql" className="flex items-center gap-2">
+              <Table className="h-4 w-4" />
+              SQL Query
             </TabsTrigger>
             <TabsTrigger value="analytics" className="flex items-center gap-2">
               <Activity className="h-4 w-4" />
@@ -278,6 +283,10 @@ const Dashboard = () => {
               <SimpleTableViewer />
               <DatabaseDashboard />
             </div>
+          </TabsContent>
+
+          <TabsContent value="sql">
+            <SQLEditor />
           </TabsContent>
 
           <TabsContent value="analytics">
