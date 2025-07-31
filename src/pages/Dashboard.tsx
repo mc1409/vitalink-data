@@ -20,6 +20,7 @@ import MedicalDataProcessor from '@/components/MedicalDataProcessor';
 import SQLEditor from '@/components/SQLEditor';
 import DatabaseDashboard from '@/components/DatabaseDashboard';
 import SimpleTableViewer from '@/components/SimpleTableViewer';
+import LabResultsTimeline from '@/components/LabResultsTimeline';
 import { useAuth } from '@/components/AuthProvider';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -290,22 +291,7 @@ const Dashboard = () => {
           </TabsContent>
 
           <TabsContent value="analytics">
-            <Card className="shadow-medical">
-              <CardHeader>
-                <CardTitle>Analytics & Insights</CardTitle>
-                <CardDescription>
-                  Data visualization and health insights (coming soon)
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="py-12">
-                <div className="text-center">
-                  <BarChart3 className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <p className="text-muted-foreground">
-                    Analytics dashboard will be available once you start uploading data
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
+            <LabResultsTimeline />
           </TabsContent>
         </Tabs>
       </main>
