@@ -76,31 +76,14 @@ LIMIT 5;`
     const startTime = Date.now();
 
     try {
-      // Execute raw SQL query using Supabase RPC
-      const { data, error } = await supabase.rpc('execute_sql', {
-        query_text: query
+      // For now, show a message that custom SQL execution requires the migration
+      setResult({
+        data: null,
+        error: "SQL query execution requires the database migration to be approved and executed first. Please approve the migration above to enable this feature.",
+        rowCount: 0,
+        executionTime: Date.now() - startTime
       });
-
-      const executionTime = Date.now() - startTime;
-
-      if (error) {
-        setResult({
-          data: null,
-          error: error.message,
-          rowCount: 0,
-          executionTime
-        });
-        toast.error(error.message);
-      } else {
-        const resultData = data || [];
-        setResult({
-          data: resultData,
-          error: null,
-          rowCount: resultData.length,
-          executionTime
-        });
-        toast.success(`Returned ${resultData.length} rows in ${executionTime}ms`);
-      }
+      toast.error("Migration required for SQL execution");
     } catch (err) {
       const executionTime = Date.now() - startTime;
       const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
