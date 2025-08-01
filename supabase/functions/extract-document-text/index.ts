@@ -146,20 +146,24 @@ async function extractFromPDF(uint8Array: Uint8Array): Promise<string> {
       
       // Define patterns for medical/lab content vs PDF metadata
       const medicalPatterns = [
-        /\b(hemoglobin|glucose|cholesterol|blood|urine|test|result|normal|abnormal|high|low|mg\/dl|mmol\/l)\b/i,
-        /\b\d+\.?\d*\s*(mg\/dl|mmol\/l|g\/dl|%|bpm|cm|kg|lbs)\b/i,
-        /\b(patient|name|age|date|doctor|lab|report|analysis)\b/i,
-        /\b[A-Z][a-z]+\s+[A-Z][a-z]+\b/, // Names like "John Doe"
-        /\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/, // Dates
-        /\b\d+:\d+\b/, // Times
+        /hemoglobin|glucose|cholesterol|blood|urine|test|result|normal|abnormal|high|low/i,
+        /\d+\.?\d*\s*mg\/dl|\d+\.?\d*\s*mmol\/l|\d+\.?\d*\s*g\/dl|\d+\.?\d*\s*%/i,
+        /patient|name|age|date|doctor|lab|report|analysis/i,
+        /\d{1,2}\/\d{1,2}\/\d{2,4}/, // Dates
+        /\d+:\d+/, // Times
       ];
       
       const metadataPatterns = [
-        /^(Identity|Adobe|UCS|CMap|Type|Font|Encoding|BaseFont|Times|Helvetica|Arial|Courier)$/i,
-        /^(HiQPdf|PDF|Creator|Producer|Version|Acrobat)$/i,
+        /^Identity$/i,
+        /^Adobe$/i,
+        /^UCS$/i,
+        /^CMap$/i,
+        /^Type$/i,
+        /^Font$/i,
+        /^HiQPdf$/i,
+        /^PDF$/i,
         /^[\d\.\-\s\\/\\]+$/,
         /^[A-F0-9]{8,}$/i, // Hex strings
-        /^(obj|endobj|stream|endstream|xref|trailer)$/i,
       ];
       
       while ((match = parenthesesRegex.exec(pdfContent)) !== null) {
