@@ -159,7 +159,7 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
       // Store activity metrics
       const { error: activityError } = await supabase
         .from('activity_metrics')
-        .upsert({
+        .insert({
           user_id: userId,
           measurement_date: mockHealthData.date,
           measurement_timestamp: new Date().toISOString(),
@@ -170,8 +170,6 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
           device_type: 'HealthKit',
           data_source: 'Apple HealthKit',
           updated_at: new Date().toISOString()
-        }, {
-          onConflict: 'user_id,measurement_date'
         });
 
       if (activityError) throw activityError;
@@ -179,7 +177,7 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
       // Store heart rate metrics
       const { error: heartError } = await supabase
         .from('heart_metrics')
-        .upsert({
+        .insert({
           user_id: userId,
           measurement_timestamp: new Date().toISOString(),
           average_heart_rate: mockHealthData.heartRate,
@@ -196,7 +194,7 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
       // Store sleep metrics if available
       const { error: sleepError } = await supabase
         .from('sleep_metrics')
-        .upsert({
+        .insert({
           user_id: userId,
           sleep_date: mockHealthData.date,
           total_sleep_time: Math.round(mockHealthData.sleepHours * 60), // Convert hours to minutes
@@ -207,8 +205,6 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
           device_type: 'HealthKit',
           data_source: 'Apple HealthKit',
           updated_at: new Date().toISOString()
-        }, {
-          onConflict: 'user_id,sleep_date'
         });
 
       if (sleepError) throw sleepError;
