@@ -155,10 +155,10 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
         date: new Date().toISOString().split('T')[0]
       };
 
-      // Store activity metrics
+      // Store activity metrics (upsert to handle duplicates)
       const { error: activityError } = await supabase
         .from('activity_metrics')
-        .insert({
+        .upsert({
           user_id: userId,
           measurement_date: mockHealthData.date,
           measurement_timestamp: new Date().toISOString(),
@@ -169,14 +169,16 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
           device_type: 'HealthKit',
           data_source: 'Apple HealthKit',
           updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'user_id,device_type,measurement_date'
         });
 
       if (activityError) throw activityError;
 
-      // Store heart rate metrics
+      // Store heart rate metrics (upsert to handle duplicates)
       const { error: heartError } = await supabase
         .from('heart_metrics')
-        .insert({
+        .upsert({
           user_id: userId,
           measurement_timestamp: new Date().toISOString(),
           average_heart_rate: mockHealthData.heartRate,
@@ -186,14 +188,16 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
           device_type: 'HealthKit',
           data_source: 'Apple HealthKit',
           updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'user_id,device_type,measurement_timestamp'
         });
 
       if (heartError) throw heartError;
 
-      // Store sleep metrics if available
+      // Store sleep metrics if available (upsert to handle duplicates)
       const { error: sleepError } = await supabase
         .from('sleep_metrics')
-        .insert({
+        .upsert({
           user_id: userId,
           sleep_date: mockHealthData.date,
           total_sleep_time: Math.round(mockHealthData.sleepHours * 60), // Convert hours to minutes
@@ -204,6 +208,8 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
           device_type: 'HealthKit',
           data_source: 'Apple HealthKit',
           updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'user_id,device_type,sleep_date'
         });
 
       if (sleepError) throw sleepError;
