@@ -194,13 +194,15 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
 
         // Store activity metrics with enhanced conflict resolution
         try {
-          // First, try to find existing record using proper query
+          // First, try to find existing record using proper query with ordering
           const { data: existingActivity, error: queryError } = await supabase
             .from('activity_metrics')
             .select('id')
             .eq('user_id', userId)
             .eq('device_type', 'HealthKit')
             .eq('measurement_date', mockHealthData.date)
+            .order('created_at', { ascending: false })
+            .limit(1)
             .maybeSingle();
 
           if (queryError) {
@@ -263,6 +265,8 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
             .eq('user_id', userId)
             .eq('device_type', 'HealthKit')
             .gte('measurement_timestamp', oneHourAgo)
+            .order('measurement_timestamp', { ascending: false })
+            .limit(1)
             .maybeSingle();
 
           if (queryError) {
