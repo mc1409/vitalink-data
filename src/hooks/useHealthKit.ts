@@ -185,7 +185,7 @@ export const useHealthKit = (): HealthKitHook => {
           ? (stepsResult.value as any).resultData.reduce((sum: number, item: any) => sum + (Number(item.value) || 0), 0) 
           : 0,
         distance: distanceResult.status === 'fulfilled' && (distanceResult.value as any)?.resultData?.length > 0
-          ? Math.round((distanceResult.value as any).resultData.reduce((sum: number, item: any) => sum + (Number(item.value) || 0), 0) * 100) / 100
+          ? Math.round((distanceResult.value as any).resultData.reduce((sum: number, item: any) => sum + (Number(item.value) || 0), 0) / 1000 * 100) / 100
           : 0,
         activeCalories: activeCaloriesResult.status === 'fulfilled' && (activeCaloriesResult.value as any)?.resultData?.length > 0
           ? Math.round((activeCaloriesResult.value as any).resultData.reduce((sum: number, item: any) => sum + (Number(item.value) || 0), 0))
@@ -203,10 +203,10 @@ export const useHealthKit = (): HealthKitHook => {
           : 0,
         weight: weightResult.status === 'fulfilled' && (weightResult.value as any)?.resultData?.length > 0
           ? Math.round(Number((weightResult.value as any).resultData[0].value) * 10) / 10
-          : 0,
+          : undefined,
         bodyFat: bodyFatResult.status === 'fulfilled' && (bodyFatResult.value as any)?.resultData?.length > 0
-          ? Math.round(Number((bodyFatResult.value as any).resultData[0].value) * 10) / 10
-          : 0,
+          ? Math.round(Number((bodyFatResult.value as any).resultData[0].value) * 100 * 10) / 10
+          : undefined,
         timestamp: new Date().toISOString()
       };
 

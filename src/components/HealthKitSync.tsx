@@ -150,14 +150,20 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
         totalCalories: Math.floor(Math.random() * 800) + 1200, // 1200-2000 calories
         heartRate: Math.floor(Math.random() * 40) + 60, // 60-100 bpm
         sleepHours: Math.round((Math.random() * 3 + 6) * 10) / 10, // 6-9 hours
-        weight: Math.round((Math.random() * 30 + 60) * 10) / 10, // 60-90 kg
-        bodyFat: Math.round((Math.random() * 20 + 10) * 10) / 10, // 10-30%
+        weight: Math.random() > 0.3 ? Math.round((Math.random() * 30 + 60) * 10) / 10 : undefined, // Sometimes no weight data
+        bodyFat: Math.random() > 0.5 ? Math.round((Math.random() * 20 + 10) * 10) / 10 : undefined, // Sometimes no body fat data
         date: new Date().toISOString().split('T')[0]
       };
 
       // Validate user ID
       if (!userId || typeof userId !== 'string') {
         throw new Error('Invalid user ID');
+      }
+
+      // Validate required data exists
+      if (!mockHealthData.date || !mockHealthData.steps) {
+        console.warn('Insufficient health data for sync');
+        throw new Error('Insufficient health data available');
       }
 
       // Prepare activity metrics data with proper validation
@@ -261,34 +267,37 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
         throw new Error(`Failed to sync heart data: ${heartError.message}`);
       }
 
-      // Prepare sleep metrics data with proper validation
-      const sleepData = {
-        user_id: userId,
-        sleep_date: mockHealthData.date,
-        total_sleep_time: Math.max(0, Math.min(1440, Math.round(mockHealthData.sleepHours * 60))), // Convert hours to minutes, max 24 hours
-        deep_sleep_minutes: Math.max(0, Math.round(mockHealthData.sleepHours * 60 * 0.3)),
-        light_sleep_minutes: Math.max(0, Math.round(mockHealthData.sleepHours * 60 * 0.7)),
-        time_in_bed: Math.max(0, Math.round(mockHealthData.sleepHours * 60 + Math.random() * 30)), // Add some variation
-        sleep_efficiency: Math.max(0, Math.min(100, Math.round((mockHealthData.sleepHours / (mockHealthData.sleepHours + 0.5)) * 100))), // Mock efficiency
-        device_type: 'HealthKit',
-        data_source: 'Apple HealthKit',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
+      // Only sync sleep if we have meaningful data
+      if (mockHealthData.sleepHours > 0) {
+        // Prepare sleep metrics data with proper validation
+        const sleepData = {
+          user_id: userId,
+          sleep_date: mockHealthData.date,
+          total_sleep_time: Math.max(0, Math.min(1440, Math.round(mockHealthData.sleepHours * 60))), // Convert hours to minutes, max 24 hours
+          deep_sleep_minutes: Math.max(0, Math.round(mockHealthData.sleepHours * 60 * 0.3)),
+          light_sleep_minutes: Math.max(0, Math.round(mockHealthData.sleepHours * 60 * 0.7)),
+          time_in_bed: Math.max(0, Math.round(mockHealthData.sleepHours * 60 + Math.random() * 30)), // Add some variation
+          sleep_efficiency: Math.max(0, Math.min(100, Math.round((mockHealthData.sleepHours / (mockHealthData.sleepHours + 0.5)) * 100))), // Mock efficiency
+          device_type: 'HealthKit',
+          data_source: 'Apple HealthKit',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
 
-      // Store sleep metrics using upsert (this table has unique constraint)
-      try {
-        const { error: sleepError } = await supabase
-          .from('sleep_metrics')
-          .upsert(sleepData, {
-            onConflict: 'user_id,device_type,sleep_date',
-            ignoreDuplicates: false
-          });
+        // Store sleep metrics using upsert (this table has unique constraint)
+        try {
+          const { error: sleepError } = await supabase
+            .from('sleep_metrics')
+            .upsert(sleepData, {
+              onConflict: 'user_id,device_type,sleep_date',
+              ignoreDuplicates: false
+            });
 
-        if (sleepError) throw sleepError;
-      } catch (sleepError) {
-        console.error('Sleep metrics error:', sleepError);
-        throw new Error(`Failed to sync sleep data: ${sleepError.message}`);
+          if (sleepError) throw sleepError;
+        } catch (sleepError) {
+          console.error('Sleep metrics error:', sleepError);
+          throw new Error(`Failed to sync sleep data: ${sleepError.message}`);
+        }
       }
 
       // Update sync timestamp
