@@ -6,6 +6,7 @@ import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Smartphone, Heart, Activity, Moon, Scale, Droplets } from 'lucide-react';
 import { CapacitorHealthkit, SampleNames } from '@perfood/capacitor-healthkit';
+import { Capacitor } from '@capacitor/core';
 
 interface HealthKitSyncProps {
   userId: string;
@@ -29,6 +30,7 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [lastSync, setLastSync] = useState<Date | null>(null);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
+  const [isNativePlatform, setIsNativePlatform] = useState(false);
 
   useEffect(() => {
     checkConnectionStatus();
@@ -36,6 +38,15 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
 
   const checkConnectionStatus = async () => {
     try {
+      // Check if running in browser vs mobile app
+      const isCapacitorNative = Capacitor.isNativePlatform();
+      setIsNativePlatform(isCapacitorNative);
+      
+      if (!isCapacitorNative) {
+        // Running in web browser - HealthKit not available
+        return;
+      }
+      
       // Check if HealthKit is available using the plugin
       await CapacitorHealthkit.isAvailable();
       
@@ -50,11 +61,7 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
       }
     } catch (error) {
       console.error('HealthKit not available:', error);
-      toast({
-        title: "HealthKit Unavailable",
-        description: "HealthKit is only available on iOS devices",
-        variant: "destructive"
-      });
+      // Don't show error toast for web platform
     }
   };
 
@@ -257,10 +264,10 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
           ) : (
             <Button 
               onClick={connectHealthKit} 
-              disabled={isLoading}
+              disabled={isLoading || !isNativePlatform}
               size="sm"
             >
-              {isLoading ? "Connecting..." : "Connect HealthKit"}
+              {isLoading ? "Connecting..." : !isNativePlatform ? "iOS Only" : "Connect HealthKit"}
             </Button>
           )}
         </div>
@@ -314,7 +321,7 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
           </>
         )}
 
-        {!isConnected && (
+        {!isConnected && isNativePlatform && (
           <div className="text-sm text-muted-foreground bg-muted p-3 rounded-md">
             <p className="font-medium mb-1">What data will be imported:</p>
             <ul className="list-disc list-inside space-y-1">
@@ -324,6 +331,16 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
               <li>Sleep duration and quality</li>
               <li>Body weight and composition</li>
             </ul>
+          </div>
+        )}
+
+        {!isNativePlatform && (
+          <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 p-4 rounded-md">
+            <p className="font-medium mb-2">📱 Mobile App Required</p>
+            <p className="mb-2">HealthKit integration only works on iOS devices with the native mobile app.</p>
+            <p className="text-xs">
+              <strong>To test:</strong> Run <code>npx cap run ios</code> to open in iOS Simulator or install on an iPhone.
+            </p>
           </div>
         )}
       </CardContent>
