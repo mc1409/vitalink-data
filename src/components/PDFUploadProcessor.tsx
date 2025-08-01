@@ -158,55 +158,105 @@ const PDFUploadProcessor: React.FC = () => {
   // Extract text from PDF using client-side pdfjs-dist
   const extractTextFromPDF = useCallback(async (file: File): Promise<string> => {
     try {
-      updateProcessingStep('extract', 'processing', 'Loading PDF document...');
+      updateProcessingStep('extract', 'processing', 'Loading PDF.js library...');
       
-      // Dynamic import of pdfjs-dist to avoid SSR issues
-      const pdfjsLib = await import('pdfjs-dist');
+      // Import PDF.js
+      const pdfjs = await import('pdfjs-dist');
       
-      // Set worker path
-      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      // Set up worker - use a more reliable CDN URL
+      const workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
+      pdfjs.GlobalWorkerOptions.workerSrc = workerSrc;
+      
+      console.log('PDF.js worker set to:', workerSrc);
+      
+      updateProcessingStep('extract', 'processing', 'Reading PDF file...');
       
       // Convert file to array buffer
       const arrayBuffer = await file.arrayBuffer();
-      const uint8Array = new Uint8Array(arrayBuffer);
+      const typedArray = new Uint8Array(arrayBuffer);
       
-      updateProcessingStep('extract', 'processing', 'Parsing PDF structure...');
+      console.log(`Loading PDF document, size: ${typedArray.length} bytes`);
+      
+      updateProcessingStep('extract', 'processing', 'Parsing PDF document...');
       
       // Load the PDF document
-      const pdf = await pdfjsLib.getDocument({ data: uint8Array }).promise;
+      const loadingTask = pdfjs.getDocument({
+        data: typedArray,
+        cMapUrl: 'https://unpkg.com/pdfjs-dist@3.11.174/cmaps/',
+        cMapPacked: true,
+      });
+      
+      const pdf = await loadingTask.promise;
       const numPages = pdf.numPages;
+      
+      console.log(`PDF loaded successfully. Pages: ${numPages}`);
       
       updateProcessingStep('extract', 'processing', `Extracting text from ${numPages} pages...`);
       
       let extractedText = '';
+      let totalTextLength = 0;
       
       // Extract text from each page
       for (let pageNum = 1; pageNum <= numPages; pageNum++) {
-        const page = await pdf.getPage(pageNum);
-        const textContent = await page.getTextContent();
-        
-        // Combine text items from the page
-        const pageText = textContent.items
-          .map((item: any) => item.str)
-          .join(' ');
-        
-        extractedText += `Page ${pageNum}:\n${pageText}\n\n`;
-        
-        // Update progress
-        setProgress((pageNum / numPages) * 100);
+        try {
+          console.log(`Processing page ${pageNum}/${numPages}`);
+          
+          const page = await pdf.getPage(pageNum);
+          const textContent = await page.getTextContent();
+          
+          // Combine text items from the page
+          const pageText = textContent.items
+            .filter((item: any) => item.str && item.str.trim())
+            .map((item: any) => item.str.trim())
+            .join(' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+          
+          if (pageText) {
+            extractedText += `\n--- Page ${pageNum} ---\n${pageText}\n`;
+            totalTextLength += pageText.length;
+          }
+          
+          // Update progress
+          const progressPercent = (pageNum / numPages) * 100;
+          setProgress(progressPercent);
+          
+          console.log(`Page ${pageNum} processed. Text length: ${pageText.length}`);
+          
+        } catch (pageError) {
+          console.warn(`Failed to extract text from page ${pageNum}:`, pageError);
+          extractedText += `\n--- Page ${pageNum} (Error) ---\nFailed to extract text from this page.\n`;
+        }
       }
       
-      if (!extractedText || extractedText.trim().length === 0) {
-        throw new Error('No readable text found in the PDF. This may be a scanned document that requires OCR.');
+      console.log(`Total extracted text length: ${totalTextLength}`);
+      
+      if (totalTextLength === 0) {
+        throw new Error('No readable text found in the PDF. This may be a scanned document that requires OCR processing.');
       }
       
-      updateProcessingStep('extract', 'completed', `Successfully extracted ${extractedText.length} characters from ${numPages} pages`);
+      if (totalTextLength < 50) {
+        console.warn('Very little text extracted, PDF might be scanned or image-based');
+        extractedText += '\n\n⚠️ Note: Very little text was extracted. This PDF may be scanned or image-based and might need OCR processing for better results.';
+      }
+      
+      updateProcessingStep('extract', 'completed', `Successfully extracted ${totalTextLength} characters from ${numPages} pages`);
       return extractedText.trim();
       
     } catch (error: any) {
-      console.error('PDF extraction failed:', error);
-      updateProcessingStep('extract', 'error', error.message);
-      throw error;
+      console.error('Client-side PDF extraction failed:', error);
+      updateProcessingStep('extract', 'error', `PDF extraction failed: ${error.message}`);
+      
+      // If client-side fails, fallback to server-side for PDFs as well
+      console.log('Falling back to server-side extraction...');
+      updateProcessingStep('extract', 'processing', 'Trying server-side extraction as fallback...');
+      
+      try {
+        return await extractTextFromOtherDocuments(file);
+      } catch (fallbackError: any) {
+        console.error('Server-side fallback also failed:', fallbackError);
+        throw new Error(`Both client-side and server-side PDF extraction failed. ${error.message}`);
+      }
     }
   }, [updateProcessingStep]);
 
