@@ -304,16 +304,76 @@ const DatabaseDashboard = () => {
           </Card>
         </TabsContent>
 
-        <TabsContent value="medical">
+        <TabsContent value="medical" className="space-y-6">
           {renderTablesByCategory('Medical Records')}
+          {selectedTable && (
+            <Card className="shadow-medical">
+              <CardHeader>
+                <CardTitle>Table Data</CardTitle>
+                <CardDescription>
+                  Viewing data from the selected table
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loading ? (
+                  <div className="text-center py-8">
+                    <RefreshCw className="h-8 w-8 text-muted-foreground mx-auto mb-4 animate-spin" />
+                    <p className="text-muted-foreground">Loading table data...</p>
+                  </div>
+                ) : (
+                  renderTableData()
+                )}
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
-        <TabsContent value="biomarkers">
+        <TabsContent value="biomarkers" className="space-y-6">
           {renderTablesByCategory('Biomarker Data')}
+          {selectedTable && (
+            <Card className="shadow-medical">
+              <CardHeader>
+                <CardTitle>Table Data</CardTitle>
+                <CardDescription>
+                  Viewing data from the selected table
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loading ? (
+                  <div className="text-center py-8">
+                    <RefreshCw className="h-8 w-8 text-muted-foreground mx-auto mb-4 animate-spin" />
+                    <p className="text-muted-foreground">Loading table data...</p>
+                  </div>
+                ) : (
+                  renderTableData()
+                )}
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
-        <TabsContent value="system">
+        <TabsContent value="system" className="space-y-6">
           {renderTablesByCategory('System')}
+          {selectedTable && (
+            <Card className="shadow-medical">
+              <CardHeader>
+                <CardTitle>Table Data</CardTitle>
+                <CardDescription>
+                  Viewing data from the selected table
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loading ? (
+                  <div className="text-center py-8">
+                    <RefreshCw className="h-8 w-8 text-muted-foreground mx-auto mb-4 animate-spin" />
+                    <p className="text-muted-foreground">Loading table data...</p>
+                  </div>
+                ) : (
+                  renderTableData()
+                )}
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
       </Tabs>
     </div>
