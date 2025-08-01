@@ -88,7 +88,10 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    console.error('Error in extract-document-text function:', error);
+    console.error('❌ Error in extract-document-text function:', error);
+    console.error('❌ Error stack:', error.stack);
+    console.error('❌ Error name:', error.name);
+    console.error('❌ Error message:', error.message);
     
     return new Response(JSON.stringify({
       success: false,
@@ -109,13 +112,16 @@ async function extractFromPDF(uint8Array: Uint8Array): Promise<string> {
   try {
     console.log('🔍 Starting advanced PDF text extraction...');
     
-    // Try PDF-Parse library first for proper PDF parsing
+    // Try PDF-Parse library first for proper PDF parsing - with proper error handling
+    let pdfParseText = '';
     try {
+      console.log('📚 Attempting to import pdf-parse library...');
       const pdfParse = await import('https://esm.sh/pdf-parse@1.1.1');
-      console.log('📚 Using pdf-parse library for extraction...');
+      console.log('✅ pdf-parse imported successfully');
       
+      console.log('🔄 Running pdf-parse on document...');
       const data = await pdfParse.default(uint8Array);
-      console.log(`📄 PDF Info: ${data.numpages} pages, ${data.info?.Title || 'No title'}`);
+      console.log(`📄 PDF Info: ${data.numpages} pages, Title: ${data.info?.Title || 'No title'}`);
       
       if (data.text && data.text.trim().length > 50) {
         console.log(`✅ Successfully extracted ${data.text.length} characters using pdf-parse`);
@@ -123,9 +129,10 @@ async function extractFromPDF(uint8Array: Uint8Array): Promise<string> {
         return data.text;
       } else {
         console.log('⚠️ pdf-parse extracted minimal text, trying fallback methods...');
+        pdfParseText = data.text || '';
       }
     } catch (pdfParseError) {
-      console.log('❌ pdf-parse failed:', pdfParseError.message);
+      console.error('❌ pdf-parse failed with error:', pdfParseError);
       console.log('🔄 Falling back to manual extraction...');
     }
 
