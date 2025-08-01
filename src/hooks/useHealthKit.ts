@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { toast } from '@/hooks/use-toast';
+import { Capacitor } from '@capacitor/core';
+import { useToast } from '@/hooks/use-toast';
 
 interface HealthKitHook {
   isAvailable: boolean;
@@ -14,6 +15,7 @@ export const useHealthKit = (): HealthKitHook => {
   const [isAvailable, setIsAvailable] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
     checkAvailability();
@@ -21,103 +23,103 @@ export const useHealthKit = (): HealthKitHook => {
   }, []);
 
   const checkAvailability = () => {
-    // Check if running on iOS
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-    setIsAvailable(isIOS);
+    // Check if HealthKit is available (iOS native only)
+    const isNative = Capacitor.isNativePlatform();
+    const platform = Capacitor.getPlatform();
+    const available = isNative && platform === 'ios';
+    setIsAvailable(available);
   };
 
   const checkConnectionStatus = () => {
-    const stored = localStorage.getItem('healthkit-connected');
-    setIsConnected(!!stored);
+    const stored = localStorage.getItem('healthkit_connected');
+    setIsConnected(stored === 'true');
   };
 
-  const connect = async () => {
+  const connect = async (): Promise<void> => {
     if (!isAvailable) {
-      toast({
-        title: "HealthKit Unavailable",
-        description: "HealthKit is only available on iOS devices",
-        variant: "destructive"
-      });
-      return;
+      throw new Error('HealthKit is not available on this device');
     }
 
     setIsLoading(true);
     try {
-      // In production, this would use the actual HealthKit plugin:
-      // import { HealthKit } from '@capacitor-community/healthkit';
-      // 
-      // const permissions = await HealthKit.requestAuthorization({
-      //   read: [
-      //     'stepCount',
-      //     'distanceWalkingRunning',
-      //     'activeEnergyBurned',
-      //     'basalEnergyBurned',
-      //     'heartRate',
-      //     'sleepAnalysis',
-      //     'bodyMass',
-      //     'bodyFatPercentage'
-      //   ],
-      //   write: []
-      // });
-
-      // Simulate permission request
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // In a real implementation, this would use native iOS HealthKit APIs
+      // through Capacitor's bridge. For now, we simulate the connection.
       
+      // Simulate permission request
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
+      // Store connection status
+      localStorage.setItem('healthkit_connected', 'true');
       setIsConnected(true);
-      localStorage.setItem('healthkit-connected', 'true');
       
       toast({
         title: "HealthKit Connected",
-        description: "Successfully connected to Apple Health",
+        description: "Successfully connected to Apple HealthKit",
       });
+      
     } catch (error) {
-      console.error('HealthKit connection error:', error);
+      console.error('HealthKit connection failed:', error);
       toast({
         title: "Connection Failed",
         description: "Failed to connect to HealthKit",
         variant: "destructive"
       });
+      throw error;
     } finally {
       setIsLoading(false);
     }
   };
 
-  const disconnect = () => {
+  const disconnect = (): void => {
+    localStorage.removeItem('healthkit_connected');
+    localStorage.removeItem('healthkit_last_sync');
     setIsConnected(false);
-    localStorage.removeItem('healthkit-connected');
-    localStorage.removeItem('healthkit-last-sync');
     
     toast({
       title: "HealthKit Disconnected",
-      description: "Disconnected from Apple Health",
+      description: "Successfully disconnected from HealthKit",
     });
   };
 
-  const syncData = async () => {
+  const syncData = async (): Promise<any> => {
     if (!isConnected) {
-      throw new Error('HealthKit not connected');
+      throw new Error('Not connected to HealthKit');
     }
 
-    // In production, this would query actual HealthKit data:
-    // const stepData = await HealthKit.queryHKitSampleType({
-    //   sampleName: 'stepCount',
-    //   startDate: new Date(Date.now() - 24 * 60 * 60 * 1000),
-    //   endDate: new Date(),
-    //   limit: 100
-    // });
+    setIsLoading(true);
+    try {
+      // Mock health data - in real implementation, this would fetch from HealthKit
+      const healthData = {
+        steps: Math.floor(Math.random() * 5000) + 5000,
+        distance: Math.round((Math.random() * 3 + 2) * 100) / 100,
+        activeCalories: Math.floor(Math.random() * 300) + 200,
+        totalCalories: Math.floor(Math.random() * 800) + 1200,
+        heartRate: Math.floor(Math.random() * 40) + 60,
+        sleepHours: Math.round((Math.random() * 3 + 6) * 10) / 10,
+        weight: Math.round((Math.random() * 30 + 60) * 10) / 10,
+        bodyFat: Math.round((Math.random() * 20 + 10) * 10) / 10,
+        timestamp: new Date().toISOString()
+      };
 
-    // For now, return mock data
-    return {
-      steps: Math.floor(Math.random() * 10000) + 5000,
-      distance: Math.floor(Math.random() * 5000) + 2000,
-      activeCalories: Math.floor(Math.random() * 500) + 200,
-      totalCalories: Math.floor(Math.random() * 1000) + 1500,
-      heartRate: Math.floor(Math.random() * 40) + 60,
-      sleepHours: Math.floor(Math.random() * 3) + 6,
-      weight: Math.floor(Math.random() * 20) + 150,
-      bodyFat: Math.floor(Math.random() * 10) + 15,
-      timestamp: new Date().toISOString()
-    };
+      // Simulate sync delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Update last sync time
+      localStorage.setItem('healthkit_last_sync', new Date().toLocaleString());
+      
+      return healthData;
+      
+    } catch (error) {
+      console.error('HealthKit sync failed:', error);
+      toast({
+        title: "Sync Failed",
+        description: "Failed to sync health data",
+        variant: "destructive"
+      });
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return {

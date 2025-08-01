@@ -21,9 +21,8 @@ npm cache clean --force
 # Update Capacitor to latest stable
 npm install @capacitor/core@^7.4.2 @capacitor/cli@^7.4.2 @capacitor/ios@^7.4.2
 
-# Reinstall HealthKit plugin fresh
+# Remove incompatible HealthKit plugin (will use native iOS APIs instead)
 npm uninstall @perfood/capacitor-healthkit
-npm install @perfood/capacitor-healthkit@^1.3.2
 ```
 
 ## Step 3: Rebuild Web Project
@@ -74,8 +73,14 @@ Xcode should auto-add these, but verify they exist in `ios/App/App/Info.plist`:
 ## Expected Result
 - ✅ No compilation errors
 - ✅ App launches successfully in iOS Simulator
-- ✅ HealthKit permission dialog appears when connecting
-- ✅ Sample health data can be imported from Health app
+- ✅ HealthKit capabilities are configured (you'll see this in the dashboard)
+- ✅ Mock health data can be synced and displayed
+
+## Note about HealthKit Implementation
+This implementation uses mock data for demonstration. To connect to real HealthKit data, you'll need to:
+1. Implement native iOS Swift code in the Capacitor plugin
+2. Use HealthKit APIs to request permissions and fetch real data
+3. This requires iOS development knowledge and Apple Developer account
 
 ## If Issues Persist
 If you still get errors after following these steps exactly:

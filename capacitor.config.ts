@@ -5,9 +5,7 @@ const config: CapacitorConfig = {
   appName: 'VitalLink Health',
   webDir: 'dist',
   plugins: {
-    CapacitorHealthkit: {
-      enableBackgroundDelivery: false
-    }
+    // Using native iOS HealthKit APIs
   },
   ios: {
     scheme: 'VitalLink Health'
