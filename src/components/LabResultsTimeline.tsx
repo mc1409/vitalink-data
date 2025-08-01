@@ -103,31 +103,43 @@ const LabResultsTimeline = () => {
 
         if (testsError) throw testsError;
 
-        if (!labTests || labTests.length === 0) {
-          setLabResults([]);
-          setAvailableParameters([]);
-          setTimelineData([]);
-          setLoading(false);
-          return;
+        let results = [];
+
+        // Try to get lab results linked to lab tests first
+        if (labTests && labTests.length > 0) {
+          const testIds = labTests.map(test => test.id);
+          const { data: linkedResults, error: linkedError } = await supabase
+            .from('lab_results')
+            .select('*')
+            .in('lab_test_id', testIds)
+            .not('numeric_value', 'is', null);
+
+          if (!linkedError && linkedResults) {
+            results = linkedResults;
+          }
         }
 
-        // Get all lab results for these tests
-        const testIds = labTests.map(test => test.id);
-        const { data: results, error: resultsError } = await supabase
-          .from('lab_results')
-          .select('*')
-          .in('lab_test_id', testIds)
-          .not('numeric_value', 'is', null);
+        // If no linked results found, get all lab results with numeric values
+        // This handles the case where lab_test_id is null but results exist
+        if (results.length === 0) {
+          const { data: allResults, error: allError } = await supabase
+            .from('lab_results')
+            .select('*')
+            .not('numeric_value', 'is', null)
+            .order('created_at', { ascending: false });
 
-        if (resultsError) throw resultsError;
+          if (!allError && allResults) {
+            results = allResults;
+          }
+        }
 
         // Combine results with test data
         const enrichedResults = results?.map(result => {
-          const test = labTests.find(t => t.id === result.lab_test_id);
+          const test = labTests?.find(t => t.id === result.lab_test_id);
           return {
             ...result,
-            test_date: test?.collection_date || test?.result_date,
-            test_name: test?.test_name
+            test_date: test?.collection_date || test?.result_date || result.created_at?.split('T')[0],
+            test_name: test?.test_name || 'Lab Test'
           };
         }) || [];
 
