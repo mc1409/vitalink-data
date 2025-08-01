@@ -5,8 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Database, RefreshCw, Eye, Search, FileText, Activity, Heart, Beaker, Trash2, AlertTriangle } from 'lucide-react';
+import { Database, RefreshCw, Eye, Search, FileText, Activity, Heart, Beaker } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/components/AuthProvider';
 import { toast } from 'sonner';
@@ -132,55 +131,6 @@ const DatabaseDashboard = () => {
     }
   };
 
-  // Delete individual record
-  const deleteRecord = async (tableName: string, recordId: string) => {
-    try {
-      const { error } = await supabase
-        .from(tableName as any)
-        .delete()
-        .eq('id', recordId);
-
-      if (error) throw error;
-      
-      toast.success('Record deleted successfully');
-      // Refresh the table data
-      viewTableData(tableName);
-      // Refresh table counts
-      getTableInfo();
-    } catch (error) {
-      toast.error('Failed to delete record');
-      console.error('Delete error:', error);
-    }
-  };
-
-  // Clear all data from table
-  const clearTable = async (tableName: string) => {
-    try {
-      const { error } = await supabase
-        .from(tableName as any)
-        .delete()
-        .not('id', 'is', null); // This deletes all records with non-null IDs
-
-      if (error) {
-        console.error('Delete error details:', error);
-        if (error.code === '42501' || error.message.includes('policy')) {
-          toast.error(`Cannot delete from ${tableName}: Insufficient permissions or delete policy missing`);
-        } else {
-          toast.error(`Failed to clear table: ${error.message}`);
-        }
-        return;
-      }
-      
-      toast.success(`All data cleared from ${tableName}`);
-      setTableData([]);
-      setSelectedTable('');
-      getTableInfo();
-    } catch (error) {
-      console.error('Clear table error:', error);
-      toast.error('Failed to clear table: Unexpected error occurred');
-    }
-  };
-
   useEffect(() => {
     getTableInfo();
   }, []);
@@ -249,37 +199,7 @@ const DatabaseDashboard = () => {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-semibold">{selectedTable} Data</h3>
-          <div className="flex items-center gap-2">
-            <Badge variant="outline">{tableData.length} records shown</Badge>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="destructive" size="sm" className="gap-2">
-                  <Trash2 className="h-4 w-4" />
-                  Clear Table
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle className="flex items-center gap-2">
-                    <AlertTriangle className="h-5 w-5 text-destructive" />
-                    Clear All Data
-                  </AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Are you sure you want to delete ALL data from the "{selectedTable}" table? This action cannot be undone.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={() => clearTable(selectedTable)}
-                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                  >
-                    Delete All Data
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </div>
+          <Badge variant="outline">{tableData.length} records shown</Badge>
         </div>
         
         <ScrollArea className="h-96 w-full border rounded-md">
@@ -291,7 +211,6 @@ const DatabaseDashboard = () => {
                     {column}
                   </TableHead>
                 ))}
-                <TableHead className="w-20">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -302,39 +221,6 @@ const DatabaseDashboard = () => {
                       {row[column] ? String(row[column]).substring(0, 100) : 'null'}
                     </TableCell>
                   ))}
-                  <TableCell>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle className="flex items-center gap-2">
-                            <AlertTriangle className="h-5 w-5 text-destructive" />
-                            Delete Record
-                          </AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Are you sure you want to delete this record? This action cannot be undone.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={() => deleteRecord(selectedTable, row.id)}
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                          >
-                            Delete Record
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -418,76 +304,16 @@ const DatabaseDashboard = () => {
           </Card>
         </TabsContent>
 
-        <TabsContent value="medical" className="space-y-6">
+        <TabsContent value="medical">
           {renderTablesByCategory('Medical Records')}
-          {selectedTable && (
-            <Card className="shadow-medical">
-              <CardHeader>
-                <CardTitle>Table Data</CardTitle>
-                <CardDescription>
-                  Viewing data from the selected table
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {loading ? (
-                  <div className="text-center py-8">
-                    <RefreshCw className="h-8 w-8 text-muted-foreground mx-auto mb-4 animate-spin" />
-                    <p className="text-muted-foreground">Loading table data...</p>
-                  </div>
-                ) : (
-                  renderTableData()
-                )}
-              </CardContent>
-            </Card>
-          )}
         </TabsContent>
 
-        <TabsContent value="biomarkers" className="space-y-6">
+        <TabsContent value="biomarkers">
           {renderTablesByCategory('Biomarker Data')}
-          {selectedTable && (
-            <Card className="shadow-medical">
-              <CardHeader>
-                <CardTitle>Table Data</CardTitle>
-                <CardDescription>
-                  Viewing data from the selected table
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {loading ? (
-                  <div className="text-center py-8">
-                    <RefreshCw className="h-8 w-8 text-muted-foreground mx-auto mb-4 animate-spin" />
-                    <p className="text-muted-foreground">Loading table data...</p>
-                  </div>
-                ) : (
-                  renderTableData()
-                )}
-              </CardContent>
-            </Card>
-          )}
         </TabsContent>
 
-        <TabsContent value="system" className="space-y-6">
+        <TabsContent value="system">
           {renderTablesByCategory('System')}
-          {selectedTable && (
-            <Card className="shadow-medical">
-              <CardHeader>
-                <CardTitle>Table Data</CardTitle>
-                <CardDescription>
-                  Viewing data from the selected table
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {loading ? (
-                  <div className="text-center py-8">
-                    <RefreshCw className="h-8 w-8 text-muted-foreground mx-auto mb-4 animate-spin" />
-                    <p className="text-muted-foreground">Loading table data...</p>
-                  </div>
-                ) : (
-                  renderTableData()
-                )}
-              </CardContent>
-            </Card>
-          )}
         </TabsContent>
       </Tabs>
     </div>

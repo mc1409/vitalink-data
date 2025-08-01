@@ -88,10 +88,7 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    console.error('❌ Error in extract-document-text function:', error);
-    console.error('❌ Error stack:', error.stack);
-    console.error('❌ Error name:', error.name);
-    console.error('❌ Error message:', error.message);
+    console.error('Error in extract-document-text function:', error);
     
     return new Response(JSON.stringify({
       success: false,
@@ -110,127 +107,110 @@ serve(async (req) => {
 
 async function extractFromPDF(uint8Array: Uint8Array): Promise<string> {
   try {
-    console.log('📄 Starting PDF text extraction...');
-    console.log(`📄 PDF size: ${uint8Array.length} bytes`);
+    console.log('Starting PDF text extraction...');
     
-    // Try basic text extraction first
+    // Convert to text using a more reliable method
     const textDecoder = new TextDecoder('utf-8', { fatal: false });
     const pdfContent = textDecoder.decode(uint8Array);
     
-    // Extract text using simple pattern matching
-    const textMatches = [];
+    // Extract text content from PDF structure
+    let extractedText = '';
     
-    // Pattern 1: Text in parentheses (common in PDF text objects)
-    const parenthesesRegex = /\(([^)]+)\)/g;
-    let match;
-    const seenTexts = new Set();
+    // Method 1: Extract text from PDF text objects
+    const textObjectRegex = /BT\s+(.*?)\s+ET/gs;
+    const textObjects = pdfContent.match(textObjectRegex) || [];
     
-    while ((match = parenthesesRegex.exec(pdfContent)) !== null) {
-      let text = match[1];
+    for (const textObj of textObjects) {
+      // Extract text from Tj and TJ operators
+      const tjRegex = /\((.*?)\)\s*Tj/g;
+      const arrayRegex = /\[(.*?)\]\s*TJ/g;
       
-      // Clean up the text
-      text = text.replace(/\\[nrt]/g, ' ').trim();
-      
-      // Skip very short or very long strings
-      if (text.length < 3 || text.length > 100) continue;
-      
-      // Skip obvious metadata
-      if (/^(Identity|Adobe|UCS|HiQPdf|PDF|CMap|Type|Font|Resource)$/i.test(text)) continue;
-      if (/^[\d\.\-\s]+$/.test(text) && text.length < 8) continue;
-      
-      // Only include text with letters
-      if (/[a-zA-Z]{2,}/.test(text) && !seenTexts.has(text.toLowerCase())) {
-        seenTexts.add(text.toLowerCase());
-        textMatches.push(text);
+      let match;
+      while ((match = tjRegex.exec(textObj)) !== null) {
+        const text = match[1].replace(/\\[rn]/g, ' ').replace(/\\\\/g, '\\');
+        if (text.length > 1 && !/^[\d\.\-\s]+$/.test(text)) {
+          extractedText += text + ' ';
+        }
       }
-    }
-    
-    // Pattern 2: Look for BT/ET blocks (text blocks in PDF)
-    const btEtRegex = /BT\s+.*?ET/gs;
-    const btEtMatches = pdfContent.match(btEtRegex) || [];
-    
-    for (const block of btEtMatches) {
-      const blockParenthesesRegex = /\(([^)]+)\)/g;
-      let blockMatch;
       
-      while ((blockMatch = blockParenthesesRegex.exec(block)) !== null) {
-        let text = blockMatch[1];
-        text = text.replace(/\\[nrt]/g, ' ').trim();
-        
-        if (text.length >= 3 && text.length <= 100 && 
-            /[a-zA-Z]{2,}/.test(text) && 
-            !seenTexts.has(text.toLowerCase())) {
-          seenTexts.add(text.toLowerCase());
-          textMatches.push(text);
+      while ((match = arrayRegex.exec(textObj)) !== null) {
+        const arrayContent = match[1];
+        const stringRegex = /\((.*?)\)/g;
+        let stringMatch;
+        while ((stringMatch = stringRegex.exec(arrayContent)) !== null) {
+          const text = stringMatch[1].replace(/\\[rn]/g, ' ').replace(/\\\\/g, '\\');
+          if (text.length > 1 && !/^[\d\.\-\s]+$/.test(text)) {
+            extractedText += text + ' ';
+          }
         }
       }
     }
     
-    // Pattern 3: Look for Tj and TJ operators (text showing operators)
-    const tjRegex = /\(([^)]+)\)\s*[Tt][jJ]/g;
-    while ((match = tjRegex.exec(pdfContent)) !== null) {
-      let text = match[1];
-      text = text.replace(/\\[nrt]/g, ' ').trim();
+    // Method 2: If not enough text found, try broader extraction
+    if (extractedText.trim().length < 100) {
+      console.log('Using fallback text extraction method...');
       
-      if (text.length >= 3 && text.length <= 100 && 
-          /[a-zA-Z]{2,}/.test(text) && 
-          !seenTexts.has(text.toLowerCase())) {
-        seenTexts.add(text.toLowerCase());
-        textMatches.push(text);
+      // Extract text from parentheses (common PDF text storage)
+      const parenthesesRegex = /\(([^)]*)\)/g;
+      let match;
+      while ((match = parenthesesRegex.exec(pdfContent)) !== null) {
+        const text = match[1];
+        if (text && text.length > 2 && !/^[\d\.\-\s\\/\\]+$/.test(text) && !text.includes('\\')) {
+          // Filter out likely non-text content
+          if (!/^[A-Za-z0-9\s\.,;:!?\-()%\/]+$/.test(text)) continue;
+          extractedText += text + ' ';
+        }
       }
     }
     
-    let extractedText = textMatches.join(' ');
-    extractedText = extractedText.replace(/\s+/g, ' ').trim();
-    
-    if (extractedText.length > 50) {
-      console.log(`✅ Successfully extracted ${extractedText.length} characters from PDF`);
-      console.log(`📋 Sample extracted text: "${extractedText.substring(0, 200)}..."`);
-      return extractedText;
+    // Method 3: Extract from stream objects if still not enough
+    if (extractedText.trim().length < 50) {
+      console.log('Using stream extraction method...');
+      
+      const streamRegex = /stream\s*([\s\S]*?)\s*endstream/g;
+      let streamMatch;
+      while ((streamMatch = streamRegex.exec(pdfContent)) !== null) {
+        const streamContent = streamMatch[1];
+        
+        // Look for readable text patterns in streams
+        const readableTextRegex = /[A-Za-z][A-Za-z0-9\s\.,;:!?\-]{5,}/g;
+        const textMatches = streamContent.match(readableTextRegex) || [];
+        
+        for (const textMatch of textMatches.slice(0, 20)) { // Limit to prevent noise
+          if (textMatch.length > 5 && textMatch.length < 100) {
+            extractedText += textMatch + ' ';
+          }
+        }
+      }
     }
     
-    // If we got minimal text, provide helpful guidance
-    return `📄 PDF Text Extraction Complete
+    // Clean up the extracted text
+    extractedText = extractedText
+      .replace(/\s+/g, ' ')
+      .replace(/[^\x20-\x7E\n\r\t]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    
+    console.log(`Successfully extracted ${extractedText.length} characters from PDF`);
+    
+    if (extractedText.length < 10) {
+      return `PDF processed but minimal text extracted. This may be an image-based PDF or have complex formatting. 
+      
+Extracted content: "${extractedText}"
 
-⚠️ Limited text could be extracted from this PDF (${extractedText.length} characters).
-
-This could mean:
-- The PDF is scanned/image-based and requires OCR
-- The document uses complex formatting or embedded fonts
-- The PDF may be password-protected or corrupted
-- The file contains mostly images/graphics
-
-📝 Extracted content: "${extractedText}"
-
-🔧 Recommendations:
-1. **Try manual copy-paste**: If you can select text in a PDF viewer, copy and paste it directly
-2. **Use OCR tools**: For scanned documents, try:
-   - Adobe Acrobat Pro (OCR feature)
-   - Google Drive (upload PDF, it will OCR automatically)
-   - Online OCR services like SmallPDF or PDFCandy
-3. **Re-scan with better quality**: If it's a scanned document, try higher resolution
-4. **Check file format**: Ensure the PDF opens properly in other applications
-
-💡 For best results with medical/lab reports, OCR tools specifically designed for document processing work best.`;
+Please try:
+1. Converting the PDF to text format first
+2. Copying and pasting the text content directly
+3. Using an OCR tool if this is a scanned document`;
+    }
+    
+    return extractedText;
     
   } catch (error) {
-    console.error('💥 PDF extraction error:', error);
-    console.error('💥 Error details:', error.message);
-    
-    return `❌ PDF extraction failed: ${error.message}
-
-🔧 This PDF appears to be:
-- Corrupted or password protected
-- Using unsupported encoding
-- Too complex for basic text extraction
-
-💡 Please try:
-1. Copy and paste text directly from a PDF viewer
-2. Use OCR tools: Adobe Acrobat, Google Drive, smallpdf.com
-3. Convert to a different format and try again`;
+    console.error('PDF extraction error:', error);
+    return `PDF processing encountered an error: ${error.message}. Please try copying and pasting the text content directly.`;
   }
 }
-
 
 async function extractFromDocx(uint8Array: Uint8Array): Promise<string> {
   try {

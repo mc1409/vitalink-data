@@ -634,11 +634,9 @@ export type Database = {
           reference_range_max: number | null
           reference_range_min: number | null
           reference_range_text: string | null
-          result_date: string | null
           result_name: string
           result_status: string | null
           reviewing_physician: string | null
-          test_date: string | null
           text_value: string | null
           units: string | null
           updated_at: string
@@ -653,11 +651,9 @@ export type Database = {
           reference_range_max?: number | null
           reference_range_min?: number | null
           reference_range_text?: string | null
-          result_date?: string | null
           result_name: string
           result_status?: string | null
           reviewing_physician?: string | null
-          test_date?: string | null
           text_value?: string | null
           units?: string | null
           updated_at?: string
@@ -672,11 +668,9 @@ export type Database = {
           reference_range_max?: number | null
           reference_range_min?: number | null
           reference_range_text?: string | null
-          result_date?: string | null
           result_name?: string
           result_status?: string | null
           reviewing_physician?: string | null
-          test_date?: string | null
           text_value?: string | null
           units?: string | null
           updated_at?: string
