@@ -1,57 +1,55 @@
-# iOS Build Error Fix Guide
+# Complete iOS Rebuild Guide
 
 ## The Problem
-`Sandbox: bash deny(1) file-read-data` - macOS is blocking CocoaPods scripts
+Corrupted Cordova framework headers and CocoaPods installation causing compilation errors.
 
-## Solution Steps
+## Complete Clean Rebuild Steps
 
-### 1. Fix File Permissions
+### 1. Remove Existing iOS Platform
 ```bash
 # Navigate to project root
 cd /Users/2024ai/vitalink-data-clean
 
-# Fix all file permissions
-sudo chmod -R 755 ios/
-chmod +x ios/App/Pods/Target\ Support\ Files/Pods-App/Pods-App-frameworks.sh
+# Remove entire iOS platform
+rm -rf ios/
+rm -rf node_modules/@capacitor/
+npm cache clean --force
 ```
 
-### 2. Complete Clean & Rebuild
+### 2. Update Dependencies
 ```bash
-# Clean everything
-rm -rf ios/App/Pods
-rm -rf ios/App/Podfile.lock
-rm -rf ios/DerivedData
+# Update Capacitor to latest
+npm install @capacitor/core@latest @capacitor/cli@latest @capacitor/ios@latest
 
-# Rebuild web project
+# Reinstall HealthKit plugin
+npm uninstall @perfood/capacitor-healthkit
+npm install @perfood/capacitor-healthkit@latest
+```
+
+### 3. Rebuild iOS Platform
+```bash
+# Build web project first
 npm run build
 
-# Re-sync iOS platform
+# Add iOS platform fresh
+npx cap add ios
+
+# Sync project
 npx cap sync ios
 ```
 
-### 3. Alternative: Use Xcode Directly
+### 4. Configure HealthKit in Xcode
 ```bash
-# Open project in Xcode (avoids CLI sandbox issues)
+# Open in Xcode
 npx cap open ios
 ```
 
-Then in Xcode:
-- Select iPhone simulator from the device dropdown
-- Press Cmd+R to run (or click the play button)
+In Xcode:
+1. Select "App" target in project navigator
+2. Go to "Signing & Capabilities" tab
+3. Click "+ Capability" and add "HealthKit"
+4. Check "Clinical Health Records" if needed
+5. Build and run with Cmd+R
 
-### 4. If Still Failing: System Settings
-Go to System Settings > Privacy & Security > Developer Tools
-- Make sure Xcode is allowed
-- You may need to restart Terminal after changes
-
-### 5. Last Resort: Disable SIP (Advanced)
-Only if all else fails:
-1. Restart Mac and hold Cmd+R
-2. Open Terminal in Recovery Mode
-3. Run: `csrutil disable`
-4. Restart normally
-5. Build the app
-6. Re-enable SIP: `csrutil enable`
-
-## Recommended Approach
-Use Step 3 (Xcode directly) - this bypasses most permission issues.
+### 5. Test HealthKit Permissions
+The app will now request HealthKit permissions on first launch.
