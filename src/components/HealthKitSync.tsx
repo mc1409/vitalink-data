@@ -96,20 +96,34 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
 
   const connectHealthKit = async () => {
     if (!platformInfo.canUseHealthKit) {
+      const errorMsg = platformInfo.platform === 'ios' 
+        ? "Running in web mode. Use 'npx cap run ios' to test HealthKit on native iOS."
+        : `Platform '${platformInfo.platform}' doesn't support HealthKit. HealthKit requires native iOS.`;
+      
+      console.error('HealthKit Connection Failed:', errorMsg);
       toast({
-        title: "Not Available",
-        description: "HealthKit is only available on native iOS apps",
+        title: "HealthKit Unavailable",
+        description: errorMsg,
         variant: "destructive"
       });
       return;
     }
 
     setIsLoading(true);
+    
+    console.log('=== HealthKit Connection Attempt ===');
+    console.log('Platform Info:', platformInfo);
+    console.log('Capacitor getPlatform():', Capacitor.getPlatform());
+    console.log('Capacitor isNativePlatform():', Capacitor.isNativePlatform());
+    
     try {
       const { CapacitorHealthkit, SampleNames } = await import('@perfood/capacitor-healthkit');
       
+      console.log('HealthKit plugin loaded successfully');
+      console.log('Requesting permissions for health data...');
+      
       // Request permissions for various health data types
-      await CapacitorHealthkit.requestAuthorization({
+      const authResult = await CapacitorHealthkit.requestAuthorization({
         all: [],
         read: [
           SampleNames.STEP_COUNT,
@@ -119,6 +133,8 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
         ],
         write: []
       });
+      
+      console.log('Authorization result:', authResult);
       
       setIsConnected(true);
       localStorage.setItem('healthkit-connected', 'true');
