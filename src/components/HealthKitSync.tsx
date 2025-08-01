@@ -98,12 +98,11 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
       
       toast({
         title: "HealthKit Connected",
-        description: "Successfully connected to Apple HealthKit. You can now sync your health data.",
+        description: "Successfully connected to Apple HealthKit. Ready to sync data!",
         variant: "default"
       });
 
-      // Automatically sync initial data
-      await syncHealthData();
+      // Don't automatically sync - let user click sync button
       
     } catch (error) {
       console.error('HealthKit connection failed:', error);
