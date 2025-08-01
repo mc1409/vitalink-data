@@ -136,38 +136,61 @@ async function extractFromPDF(uint8Array: Uint8Array): Promise<string> {
     let extractedText = '';
     let extractionMethod = '';
     
-    // Method 1: Extract text from parentheses (most reliable for simple PDFs)
-    console.log('🎯 Method 1: Text from parentheses...');
+    // Method 1: Extract text from parentheses with smart filtering
+    console.log('🎯 Method 1: Smart text extraction from parentheses...');
     const parenthesesRegex = /\(([^)]+)\)/g;
     let match;
     const seenTexts = new Set();
     let parenthesesCount = 0;
     
+    // Define patterns for medical/lab content vs PDF metadata
+    const medicalPatterns = [
+      /\b(hemoglobin|glucose|cholesterol|blood|urine|test|result|normal|abnormal|high|low|mg\/dl|mmol\/l)\b/i,
+      /\b\d+\.?\d*\s*(mg\/dl|mmol\/l|g\/dl|%|bpm|cm|kg|lbs)\b/i,
+      /\b(patient|name|age|date|doctor|lab|report|analysis)\b/i,
+      /\b[A-Z][a-z]+\s+[A-Z][a-z]+\b/, // Names like "John Doe"
+      /\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/, // Dates
+      /\b\d+:\d+\b/, // Times
+    ];
+    
+    const metadataPatterns = [
+      /^(Identity|Adobe|UCS|CMap|Type|Font|Encoding|BaseFont|Times|Helvetica|Arial|Courier)$/i,
+      /^(HiQPdf|PDF|Creator|Producer|Version|Acrobat)$/i,
+      /^[\d\.\-\s\\/\\]+$/,
+      /^[A-F0-9]{8,}$/i, // Hex strings
+      /^(obj|endobj|stream|endstream|xref|trailer)$/i,
+    ];
+    
     while ((match = parenthesesRegex.exec(pdfContent)) !== null) {
       parenthesesCount++;
       let text = match[1];
       
-      // Skip common PDF metadata
-      if (/^(Identity|Adobe|UCS|CMap|Type|Font|Encoding|BaseFont|Times|Helvetica|Arial)$/i.test(text)) {
-        continue;
-      }
-      
       // Clean escape sequences
       text = text
-        .replace(/\\n/g, '\n')
-        .replace(/\\r/g, '\r')
-        .replace(/\\t/g, '\t')
-        .replace(/\\(.)/g, '$1');
+        .replace(/\\n/g, ' ')
+        .replace(/\\r/g, ' ')
+        .replace(/\\t/g, ' ')
+        .replace(/\\(.)/g, '$1')
+        .trim();
       
-      // Filter for meaningful text
-      if (text.length > 1 && 
-          text.length < 200 && 
-          /[a-zA-Z]/.test(text) && 
-          !/^[\d\.\-\s\\/\\]+$/.test(text) &&
-          !seenTexts.has(text.toLowerCase())) {
-        
-        seenTexts.add(text.toLowerCase());
-        extractedText += text + ' ';
+      // Skip if it matches metadata patterns
+      const isMetadata = metadataPatterns.some(pattern => pattern.test(text));
+      if (isMetadata) continue;
+      
+      // Check if it's meaningful content
+      const isMedical = medicalPatterns.some(pattern => pattern.test(text));
+      const hasLetters = /[a-zA-Z]/.test(text);
+      const hasNumbers = /\d/.test(text);
+      const isReasonableLength = text.length >= 2 && text.length <= 100;
+      const notTooManySymbols = (text.match(/[^\w\s\.,;:!?\-()%\/]/g) || []).length < text.length * 0.3;
+      
+      if (isReasonableLength && hasLetters && notTooManySymbols && !seenTexts.has(text.toLowerCase())) {
+        // Prioritize medical content or well-formed text
+        if (isMedical || (hasNumbers && hasLetters) || /^[A-Z][a-z]/.test(text)) {
+          seenTexts.add(text.toLowerCase());
+          extractedText += text + ' ';
+          console.log(`✅ Extracted: "${text}"`);
+        }
       }
     }
     
