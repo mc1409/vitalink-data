@@ -42,11 +42,17 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
       const isCapacitorNative = Capacitor.isNativePlatform();
       const platform = Capacitor.getPlatform();
       
+      console.log('=== HEALTHKIT DEBUG ===');
       console.log('Platform info:', { isCapacitorNative, platform });
+      console.log('Navigator userAgent:', navigator.userAgent);
+      console.log('Window location:', window.location.href);
       
       // Consider iOS platform (including simulator) as native
       const isIOSNative = isCapacitorNative && platform === 'ios';
       setIsNativePlatform(isIOSNative);
+      
+      console.log('Is iOS Native:', isIOSNative);
+      console.log('=== END DEBUG ===');
       
       if (!isIOSNative) {
         // Running in web browser or non-iOS platform - HealthKit not available
