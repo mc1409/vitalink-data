@@ -131,13 +131,14 @@ async function extractFromPDF(uint8Array: Uint8Array): Promise<string> {
     console.log(`- Fonts: ${hasFont}`);
     
     let extractedText = '';
+    const meaningfulTexts = new Set();
     
-    // Simple text extraction from parentheses
-    console.log('🎯 Extracting text...');
+    // Smart text extraction with better filtering
+    console.log('🎯 Extracting meaningful text...');
     const regex = /\(([^)]+)\)/g;
     let match;
     let count = 0;
-    const maxIterations = 500; // Prevent infinite loops
+    const maxIterations = 800; // Increased to find more content
     
     while ((match = regex.exec(pdfContent)) !== null && count < maxIterations) {
       count++;
@@ -145,24 +146,70 @@ async function extractFromPDF(uint8Array: Uint8Array): Promise<string> {
       let text = match[1];
       if (!text) continue;
       
-      // Basic cleaning
-      text = text.replace(/\\n/g, ' ').replace(/\\r/g, ' ').replace(/\\t/g, ' ').trim();
+      // Clean the text
+      text = text
+        .replace(/\\n/g, ' ')
+        .replace(/\\r/g, ' ')
+        .replace(/\\t/g, ' ')
+        .replace(/\\(.)/g, '$1') // Remove escape sequences
+        .trim();
       
       // Skip if too short or too long
-      if (text.length < 2 || text.length > 80) continue;
+      if (text.length < 3 || text.length > 100) continue;
       
-      // Skip obvious metadata
-      if (text === 'Identity' || text === 'Adobe' || text === 'UCS' || 
-          text === 'CMap' || text === 'Type' || text === 'Font' || 
-          text === 'HiQPdf' || text === 'PDF') continue;
+      // Skip obvious PDF metadata and technical junk
+      const junkPatterns = [
+        /^(Identity|Adobe|UCS|CMap|Type|Font|HiQPdf|PDF|Creator|Producer|BaseFont|Helvetica|Times|Arial|Courier|Symbol|ZapfDingbats)$/i,
+        /^(obj|endobj|stream|endstream|xref|trailer|startxref)$/i,
+        /^[\d\.\-\s\\/\\]+$/, // Numbers, dots, spaces only
+        /^[A-F0-9]{6,}$/i, // Hex codes
+        /^R$/i, // Single letter R (common in PDFs)
+        /^(TJ|Tj|Td|TD|Tm|T\*)$/i, // PDF operators
+        /^\d+\s+\d+\s+R$/i, // PDF references like "1 0 R"
+      ];
       
-      // Skip purely numeric content
-      if (/^[\d\.\-\s]+$/.test(text)) continue;
+      // Check if it's junk
+      const isJunk = junkPatterns.some(pattern => pattern.test(text));
+      if (isJunk) continue;
       
-      // Must have letters
-      if (!/[a-zA-Z]/.test(text)) continue;
+      // Must contain actual letters (not just numbers/symbols)
+      if (!/[a-zA-Z]{2,}/.test(text)) continue;
       
-      extractedText += text + ' ';
+      // Skip if it's mostly symbols or special characters
+      const symbolCount = (text.match(/[^\w\s\.,;:!?\-()%\/]/g) || []).length;
+      if (symbolCount > text.length * 0.4) continue;
+      
+      // Look for medical/lab content patterns
+      const medicalKeywords = [
+        /\b(patient|name|age|date|test|result|normal|abnormal|high|low|blood|urine|hemoglobin|glucose|cholesterol)\b/i,
+        /\b\d+\.?\d*\s*(mg\/dl|mmol\/l|g\/dl|%|bpm|cm|kg|lbs|units?)\b/i,
+        /\b(dr|doctor|physician|lab|laboratory|report|analysis|specimen|sample)\b/i,
+        /\b[A-Z][a-z]+\s+[A-Z][a-z]+\b/, // Names like "John Doe"
+        /\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/, // Dates
+        /\b\d{1,2}:\d{2}\b/, // Times
+      ];
+      
+      // Check if it looks like meaningful content
+      const isMedical = medicalKeywords.some(pattern => pattern.test(text));
+      const hasProperWords = /\b[A-Za-z]{3,}\b/.test(text); // Has words 3+ chars
+      const isCapitalized = /^[A-Z]/.test(text); // Starts with capital
+      const hasNumbers = /\d/.test(text);
+      
+      // Prioritize medical content, proper sentences, or meaningful data
+      if (isMedical || (hasProperWords && (isCapitalized || hasNumbers))) {
+        const lowerText = text.toLowerCase();
+        if (!meaningfulTexts.has(lowerText)) {
+          meaningfulTexts.add(lowerText);
+          extractedText += text + ' ';
+          
+          // Log what we're extracting to help debug
+          if (isMedical) {
+            console.log(`✅ Medical content: "${text}"`);
+          } else {
+            console.log(`✅ Meaningful text: "${text}"`);
+          }
+        }
+      }
     }
     
     console.log(`✅ Processed ${count} text items`);
