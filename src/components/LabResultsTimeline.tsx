@@ -37,6 +37,7 @@ interface LabResult {
   abnormal_flag: string | null;
   lab_test_id: string;
   test_date?: string;
+  result_date?: string;
   test_name?: string;
 }
 
@@ -138,7 +139,7 @@ const LabResultsTimeline = () => {
           const test = labTests?.find(t => t.id === result.lab_test_id);
           return {
             ...result,
-            test_date: test?.collection_date || test?.result_date || result.created_at?.split('T')[0],
+            test_date: result.test_date || test?.collection_date || test?.result_date || result.created_at?.split('T')[0],
             test_name: test?.test_name || 'Lab Test'
           };
         }) || [];
