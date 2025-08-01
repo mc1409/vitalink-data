@@ -159,7 +159,7 @@ const DatabaseDashboard = () => {
       const { error } = await supabase
         .from(tableName as any)
         .delete()
-        .neq('id', ''); // This deletes all records
+        .not('id', 'is', null); // This deletes all records with non-null IDs
 
       if (error) {
         console.error('Delete error details:', error);
