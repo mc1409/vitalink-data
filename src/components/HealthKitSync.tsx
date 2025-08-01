@@ -2,17 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Smartphone, Heart, Activity, Moon, Scale, Droplets } from 'lucide-react';
-import { CapacitorHealthkit, SampleNames } from '@perfood/capacitor-healthkit';
+import { Smartphone, Heart, Activity, Moon, Scale, Droplets, AlertTriangle, CheckCircle, Info } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 
 interface HealthKitSyncProps {
   userId: string;
 }
 
-// Mock HealthKit interface - will be replaced with actual plugin
 interface HealthKitData {
   steps: number;
   distance: number;
@@ -30,61 +29,94 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [lastSync, setLastSync] = useState<Date | null>(null);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
-  const [isNativePlatform, setIsNativePlatform] = useState(false);
+  const [platformInfo, setPlatformInfo] = useState({
+    isNative: false,
+    platform: 'web',
+    isIOS: false,
+    canUseHealthKit: false
+  });
 
   useEffect(() => {
-    checkConnectionStatus();
+    checkPlatformAndConnection();
   }, []);
 
-  const checkConnectionStatus = async () => {
+  const checkPlatformAndConnection = async () => {
     try {
-      // Check if running in browser vs mobile app
       const isCapacitorNative = Capacitor.isNativePlatform();
       const platform = Capacitor.getPlatform();
+      const isIOS = platform === 'ios';
+      const isWebButIOS = !isCapacitorNative && /iPad|iPhone|iPod/.test(navigator.userAgent);
       
-      console.log('=== HEALTHKIT DEBUG ===');
-      console.log('Platform info:', { isCapacitorNative, platform });
-      console.log('Navigator userAgent:', navigator.userAgent);
-      console.log('Window location:', window.location.href);
+      console.log('=== HEALTHKIT PLATFORM DEBUG ===');
+      console.log('Capacitor Native:', isCapacitorNative);
+      console.log('Platform:', platform);
+      console.log('Is iOS:', isIOS);
+      console.log('Web but iOS device:', isWebButIOS);
+      console.log('URL:', window.location.href);
+      console.log('================================');
+
+      const canUseHealthKit = isCapacitorNative && isIOS;
       
-      // Consider iOS platform (including simulator) as native
-      const isIOSNative = isCapacitorNative && platform === 'ios';
-      setIsNativePlatform(isIOSNative);
-      
-      console.log('Is iOS Native:', isIOSNative);
-      console.log('=== END DEBUG ===');
-      
-      if (!isIOSNative) {
-        // Running in web browser or non-iOS platform - HealthKit not available
-        console.log('HealthKit not available - not iOS native platform');
-        return;
-      }
-      
-      // Check if HealthKit is available using the plugin
-      await CapacitorHealthkit.isAvailable();
-      
-      // Check if we have stored connection status
-      const stored = localStorage.getItem('healthkit-connected');
-      if (stored) {
-        setIsConnected(true);
-        const lastSyncStored = localStorage.getItem('healthkit-last-sync');
-        if (lastSyncStored) {
-          setLastSync(new Date(lastSyncStored));
+      setPlatformInfo({
+        isNative: isCapacitorNative,
+        platform,
+        isIOS: isIOS || isWebButIOS,
+        canUseHealthKit
+      });
+
+      if (canUseHealthKit) {
+        // Check for existing connection
+        const stored = localStorage.getItem('healthkit-connected');
+        if (stored) {
+          setIsConnected(true);
+          const lastSyncStored = localStorage.getItem('healthkit-last-sync');
+          if (lastSyncStored) {
+            setLastSync(new Date(lastSyncStored));
+          }
+        }
+
+        // Check if HealthKit is available
+        try {
+          const { CapacitorHealthkit } = await import('@perfood/capacitor-healthkit');
+          await CapacitorHealthkit.isAvailable();
+          console.log('HealthKit is available!');
+        } catch (error) {
+          console.error('HealthKit not available:', error);
+          toast({
+            title: "HealthKit Unavailable",
+            description: "HealthKit is not available on this device",
+            variant: "destructive"
+          });
         }
       }
     } catch (error) {
-      console.error('HealthKit not available:', error);
-      // Don't show error toast for web platform
+      console.error('Platform check error:', error);
     }
   };
 
   const connectHealthKit = async () => {
+    if (!platformInfo.canUseHealthKit) {
+      toast({
+        title: "Not Available",
+        description: "HealthKit is only available on native iOS apps",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setIsLoading(true);
     try {
-      // Request permissions for various health data types using real HealthKit API
+      const { CapacitorHealthkit, SampleNames } = await import('@perfood/capacitor-healthkit');
+      
+      // Request permissions for various health data types
       await CapacitorHealthkit.requestAuthorization({
         all: [],
-        read: ['calories', 'stairs', 'activity', 'steps', 'distance', 'duration', 'weight'],
+        read: [
+          SampleNames.STEP_COUNT,
+          SampleNames.DISTANCE_WALKING_RUNNING,
+          SampleNames.ACTIVE_ENERGY_BURNED,
+          SampleNames.HEART_RATE
+        ],
         write: []
       });
       
@@ -111,61 +143,56 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
   };
 
   const syncHealthData = async () => {
-    if (!isConnected) return;
+    if (!isConnected || !platformInfo.canUseHealthKit) return;
     
     setSyncStatus('syncing');
     try {
+      const { CapacitorHealthkit, SampleNames } = await import('@perfood/capacitor-healthkit');
       const today = new Date();
       const startDate = new Date(today.getTime() - 24 * 60 * 60 * 1000); // Yesterday
       
-      // Fetch real data from HealthKit using the plugin
-      const [stepsData, distanceData, caloriesData, heartRateData] = await Promise.all([
+      // Fetch data from HealthKit
+      const [stepsData, distanceData, caloriesData, heartRateData] = await Promise.allSettled([
         CapacitorHealthkit.queryHKitSampleType({
           sampleName: SampleNames.STEP_COUNT,
           startDate: startDate.toISOString(),
           endDate: today.toISOString(),
           limit: 0
-        }).catch(() => ({ resultData: [] })),
-        
+        }),
         CapacitorHealthkit.queryHKitSampleType({
           sampleName: SampleNames.DISTANCE_WALKING_RUNNING,
           startDate: startDate.toISOString(),
           endDate: today.toISOString(),
           limit: 0
-        }).catch(() => ({ resultData: [] })),
-        
+        }),
         CapacitorHealthkit.queryHKitSampleType({
           sampleName: SampleNames.ACTIVE_ENERGY_BURNED,
           startDate: startDate.toISOString(),
           endDate: today.toISOString(),
           limit: 0
-        }).catch(() => ({ resultData: [] })),
-        
+        }),
         CapacitorHealthkit.queryHKitSampleType({
           sampleName: SampleNames.HEART_RATE,
           startDate: startDate.toISOString(),
           endDate: today.toISOString(),
           limit: 10
-        }).catch(() => ({ resultData: [] }))
+        })
       ]);
 
-      // Process the data or use defaults if no data available
+      // Process the data
       const processedData: HealthKitData = {
-        steps: stepsData.resultData?.[0]?.value || 0,
-        distance: distanceData.resultData?.[0]?.value || 0,
-        activeCalories: caloriesData.resultData?.[0]?.value || 0,
-        totalCalories: (caloriesData.resultData?.[0]?.value || 0) + 1500, // Add base metabolic rate
-        heartRate: heartRateData.resultData?.[0]?.value || 70,
-        sleepHours: 7, // Would need sleep analysis query
-        weight: undefined, // Would need separate query
-        bodyFat: undefined, // Would need separate query
+        steps: stepsData.status === 'fulfilled' ? (stepsData.value as any).resultData?.[0]?.value || 0 : 0,
+        distance: distanceData.status === 'fulfilled' ? (distanceData.value as any).resultData?.[0]?.value || 0 : 0,
+        activeCalories: caloriesData.status === 'fulfilled' ? (caloriesData.value as any).resultData?.[0]?.value || 0 : 0,
+        totalCalories: (caloriesData.status === 'fulfilled' ? (caloriesData.value as any).resultData?.[0]?.value || 0 : 0) + 1500,
+        heartRate: heartRateData.status === 'fulfilled' ? (heartRateData.value as any).resultData?.[0]?.value || 70 : 70,
+        sleepHours: 7, // Would need separate sleep analysis query
         date: new Date().toISOString().split('T')[0]
       };
 
-      // Save to activity_metrics table
-      const { error: activityError } = await supabase
-        .from('activity_metrics')
-        .upsert({
+      // Save to database
+      await Promise.all([
+        supabase.from('activity_metrics').upsert({
           user_id: userId,
           measurement_date: processedData.date,
           measurement_timestamp: new Date().toISOString(),
@@ -175,42 +202,17 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
           total_calories: processedData.totalCalories,
           device_type: 'iPhone HealthKit',
           data_source: 'Apple Health'
-        }, {
-          onConflict: 'user_id,measurement_date,device_type'
-        });
+        }, { onConflict: 'user_id,measurement_date,device_type' }),
 
-      if (activityError) throw activityError;
-
-      // Save to heart_metrics table
-      const { error: heartError } = await supabase
-        .from('heart_metrics')
-        .upsert({
+        supabase.from('heart_metrics').upsert({
           user_id: userId,
           measurement_timestamp: new Date().toISOString(),
           average_heart_rate: processedData.heartRate,
           device_type: 'iPhone HealthKit',
           data_source: 'Apple Health',
           measurement_context: 'daily_average'
-        }, {
-          onConflict: 'user_id,measurement_timestamp,device_type'
-        });
-
-      if (heartError) throw heartError;
-
-      // Save to sleep_metrics table
-      const { error: sleepError } = await supabase
-        .from('sleep_metrics')
-        .upsert({
-          user_id: userId,
-          sleep_date: processedData.date,
-          total_sleep_time: processedData.sleepHours * 60,
-          device_type: 'iPhone HealthKit',
-          data_source: 'Apple Health'
-        }, {
-          onConflict: 'user_id,sleep_date,device_type'
-        });
-
-      if (sleepError) throw sleepError;
+        }, { onConflict: 'user_id,measurement_timestamp,device_type' })
+      ]);
 
       const now = new Date();
       setLastSync(now);
@@ -219,7 +221,7 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
 
       toast({
         title: "Sync Complete",
-        description: "Health data successfully imported",
+        description: `Imported ${processedData.steps} steps, ${Math.round(processedData.distance)}m distance`,
       });
 
     } catch (error) {
@@ -227,7 +229,7 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
       setSyncStatus('error');
       toast({
         title: "Sync Failed",
-        description: "Failed to import health data",
+        description: "Failed to import health data. Check console for details.",
         variant: "destructive"
       });
     }
@@ -246,6 +248,58 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
     });
   };
 
+  const renderPlatformStatus = () => {
+    if (platformInfo.canUseHealthKit) {
+      return (
+        <Alert className="mb-4">
+          <CheckCircle className="h-4 w-4" />
+          <AlertDescription>
+            Running on native iOS app - HealthKit is available!
+          </AlertDescription>
+        </Alert>
+      );
+    }
+
+    if (platformInfo.isNative && !platformInfo.isIOS) {
+      return (
+        <Alert variant="destructive" className="mb-4">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            Running on {platformInfo.platform} - HealthKit is only available on iOS devices.
+          </AlertDescription>
+        </Alert>
+      );
+    }
+
+    if (!platformInfo.isNative) {
+      return (
+        <Alert variant="default" className="mb-4">
+          <Info className="h-4 w-4" />
+          <AlertDescription>
+            <div className="space-y-2">
+              <p className="font-semibold">Running in Web Browser</p>
+              <p>To use HealthKit, you need to run the native iOS app. Here's how:</p>
+              <div className="text-sm bg-muted p-3 rounded-md mt-2">
+                <p className="font-medium mb-2">Setup Steps:</p>
+                <ol className="list-decimal list-inside space-y-1">
+                  <li>Make sure you have Xcode installed on your Mac</li>
+                  <li>Run: <code className="bg-background px-1 rounded">npm run build</code></li>
+                  <li>Run: <code className="bg-background px-1 rounded">npx cap sync ios</code></li>
+                  <li>Run: <code className="bg-background px-1 rounded">npx cap run ios</code></li>
+                </ol>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  This will open the app in iOS Simulator or on a connected iPhone.
+                </p>
+              </div>
+            </div>
+          </AlertDescription>
+        </Alert>
+      );
+    }
+
+    return null;
+  };
+
   return (
     <Card className="w-full">
       <CardHeader>
@@ -258,6 +312,8 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        {renderPlatformStatus()}
+
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium">Connection Status:</span>
@@ -277,10 +333,12 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
           ) : (
             <Button 
               onClick={connectHealthKit} 
-              disabled={isLoading || !isNativePlatform}
+              disabled={isLoading || !platformInfo.canUseHealthKit}
               size="sm"
             >
-              {isLoading ? "Connecting..." : !isNativePlatform ? "iOS Only" : "Connect HealthKit"}
+              {isLoading ? "Connecting..." : 
+               !platformInfo.canUseHealthKit ? "iOS App Required" : 
+               "Connect HealthKit"}
             </Button>
           )}
         </div>
@@ -317,7 +375,7 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
               
               <Button 
                 onClick={syncHealthData}
-                disabled={syncStatus === 'syncing'}
+                disabled={syncStatus === 'syncing' || !platformInfo.canUseHealthKit}
                 size="sm"
                 variant="outline"
               >
@@ -334,7 +392,7 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
           </>
         )}
 
-        {!isConnected && isNativePlatform && (
+        {!isConnected && platformInfo.canUseHealthKit && (
           <div className="text-sm text-muted-foreground bg-muted p-3 rounded-md">
             <p className="font-medium mb-1">What data will be imported:</p>
             <ul className="list-disc list-inside space-y-1">
@@ -344,16 +402,6 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
               <li>Sleep duration and quality</li>
               <li>Body weight and composition</li>
             </ul>
-          </div>
-        )}
-
-        {!isNativePlatform && (
-          <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 p-4 rounded-md">
-            <p className="font-medium mb-2">📱 Mobile App Required</p>
-            <p className="mb-2">HealthKit integration only works on iOS devices with the native mobile app.</p>
-            <p className="text-xs">
-              <strong>To test:</strong> Run <code>npx cap run ios</code> to open in iOS Simulator or install on an iPhone.
-            </p>
           </div>
         )}
       </CardContent>
