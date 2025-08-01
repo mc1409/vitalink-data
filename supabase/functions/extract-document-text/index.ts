@@ -110,247 +110,127 @@ serve(async (req) => {
 
 async function extractFromPDF(uint8Array: Uint8Array): Promise<string> {
   try {
-    console.log('🤖 Starting Azure OpenAI PDF text extraction...');
+    console.log('📄 Starting PDF text extraction...');
     console.log(`📄 PDF size: ${uint8Array.length} bytes`);
     
-    // Get Azure OpenAI credentials from environment
-    const azureEndpoint = Deno.env.get('AZURE_OPENAI_ENDPOINT');
-    const azureApiKey = Deno.env.get('AZURE_OPENAI_API_KEY');
-    const azureDeployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
-    
-    if (!azureEndpoint || !azureApiKey || !azureDeployment) {
-      throw new Error('Azure OpenAI credentials not configured');
-    }
-    
-    console.log('🔑 Azure OpenAI credentials verified');
-    console.log(`🌐 Endpoint: ${azureEndpoint}`);
-    console.log(`🚀 Deployment: ${azureDeployment}`);
-    
-    // Convert PDF to base64 safely (avoid stack overflow for large files)
-    console.log('📋 Converting PDF to base64...');
-    let base64PDF = '';
-    try {
-      // Process in chunks to avoid stack overflow with large files
-      const chunkSize = 8192; // 8KB chunks
-      let binaryString = '';
-      
-      for (let i = 0; i < uint8Array.length; i += chunkSize) {
-        const chunk = uint8Array.slice(i, i + chunkSize);
-        binaryString += String.fromCharCode(...chunk);
-      }
-      
-      base64PDF = btoa(binaryString);
-      console.log(`✅ PDF converted to base64 (${base64PDF.length} chars)`);
-    } catch (conversionError) {
-      console.error('❌ Base64 conversion failed:', conversionError.message);
-      throw new Error(`Failed to convert PDF to base64: ${conversionError.message}`);
-    }
-    
-    // Prepare the prompt for text extraction
-    const systemPrompt = `You are an expert medical document text extractor. Your task is to extract ALL readable text from the provided PDF document, focusing especially on medical/lab report content.
-
-IMPORTANT INSTRUCTIONS:
-1. Extract ALL text content, including:
-   - Patient information (names, dates, IDs)
-   - Test names and results
-   - Reference ranges and units
-   - Dates and times
-   - Doctor/lab information
-   - Any numerical values with units
-   - Headers, labels, and descriptions
-
-2. Organize the extracted text logically:
-   - Preserve the document structure when possible
-   - Group related information together
-   - Maintain the order of test results as they appear
-
-3. For lab reports specifically, ensure you capture:
-   - Test names (e.g., "Hemoglobin", "Glucose", "Cholesterol")
-   - Numerical results with units (e.g., "14.5 g/dL", "95 mg/dL")
-   - Reference ranges (e.g., "Normal: 12.0-15.5 g/dL")
-   - Abnormal flags (High, Low, etc.)
-
-4. Return ONLY the extracted text content - no analysis or interpretation.
-
-5. If the PDF appears to be scanned/image-based, use your vision capabilities to read all visible text.`;
-
-    const userPrompt = `Please extract all text content from this PDF document. Focus on medical/lab data if present.`;
-    
-    // Prepare Azure OpenAI request
-    const requestBody = {
-      messages: [
-        {
-          role: "system",
-          content: systemPrompt
-        },
-        {
-          role: "user", 
-          content: [
-            {
-              type: "text",
-              text: userPrompt
-            },
-            {
-              type: "image_url",
-              image_url: {
-                url: `data:application/pdf;base64,${base64PDF}`
-              }
-            }
-          ]
-        }
-      ],
-      max_tokens: 4000,
-      temperature: 0.1,
-      response_format: { type: "text" }
-    };
-    
-    const url = `${azureEndpoint}/openai/deployments/${azureDeployment}/chat/completions?api-version=2024-02-01`;
-    
-    console.log('📤 Sending PDF to Azure OpenAI for text extraction...');
-    console.log(`⏰ Request time: ${new Date().toISOString()}`);
-    
-    // Send request to Azure OpenAI
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'api-key': azureApiKey,
-      },
-      body: JSON.stringify(requestBody),
-    });
-    
-    console.log(`📥 Response status: ${response.status}`);
-    console.log(`⏰ Response time: ${new Date().toISOString()}`);
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ Azure OpenAI API error:', errorText);
-      throw new Error(`Azure OpenAI API error: ${response.status} - ${errorText}`);
-    }
-    
-    const data = await response.json();
-    console.log('✅ Azure OpenAI response received');
-    
-    // Extract the text content from the response
-    const extractedText = data.choices?.[0]?.message?.content;
-    
-    if (!extractedText || extractedText.trim().length < 10) {
-      console.log('⚠️ Minimal text extracted from Azure OpenAI');
-      
-      return `📄 Azure OpenAI PDF Analysis Complete
-
-⚠️ The AI was able to process the PDF but extracted minimal readable text.
-
-This could mean:
-- The PDF is heavily image-based with poor quality scans
-- The document has complex formatting that obscured the text
-- The file may be corrupted or password-protected
-- The PDF contains mostly images/graphics with little text
-
-🔧 Recommendations:
-1. **Try manual copy-paste**: If you can select text in a PDF viewer, copy and paste it directly
-2. **Use OCR tools**: Try Adobe Acrobat, Google Drive, or online OCR services
-3. **Re-scan with better quality**: If it's a scanned document, try rescanning at higher resolution
-4. **Check file integrity**: Ensure the PDF opens properly in other applications
-
-📝 Extracted content: "${extractedText}"`;
-    }
-    
-    // Clean up the extracted text
-    const cleanText = extractedText
-      .replace(/\s+/g, ' ')  // Normalize whitespace
-      .trim();
-    
-    console.log(`✅ Successfully extracted ${cleanText.length} characters using Azure OpenAI`);
-    console.log(`📋 Sample extracted text: "${cleanText.substring(0, 300)}..."`);
-    
-    return cleanText;
-    
-  } catch (error) {
-    console.error('💥 Azure OpenAI PDF extraction error:', error);
-    console.error('💥 Error details:', error.message);
-    console.error('💥 Error stack:', error.stack);
-    
-    // Fallback to basic extraction if Azure OpenAI fails
-    console.log('🔄 Falling back to basic text extraction...');
-    return await fallbackPDFExtraction(uint8Array, error.message);
-  }
-}
-
-// Fallback method if Azure OpenAI fails
-async function fallbackPDFExtraction(uint8Array: Uint8Array, azureError: string): Promise<string> {
-  try {
-    console.log('🔄 Using fallback extraction method...');
-    
+    // Try basic text extraction first
     const textDecoder = new TextDecoder('utf-8', { fatal: false });
     const pdfContent = textDecoder.decode(uint8Array);
     
-    // Simple parentheses extraction as fallback
+    // Extract text using simple pattern matching
+    const textMatches = [];
+    
+    // Pattern 1: Text in parentheses (common in PDF text objects)
     const parenthesesRegex = /\(([^)]+)\)/g;
     let match;
-    let extractedText = '';
     const seenTexts = new Set();
-    let count = 0;
     
-    while ((match = parenthesesRegex.exec(pdfContent)) !== null && count < 300) {
-      count++;
+    while ((match = parenthesesRegex.exec(pdfContent)) !== null) {
       let text = match[1];
       
-      if (!text || text.length < 3 || text.length > 80) continue;
-      
-      // Basic cleaning
+      // Clean up the text
       text = text.replace(/\\[nrt]/g, ' ').trim();
       
-      // Skip obvious metadata
-      if (/^(Identity|Adobe|UCS|HiQPdf|PDF|CMap|Type|Font)$/i.test(text)) continue;
-      if (/^[\d\.\-\s]+$/.test(text)) continue;
+      // Skip very short or very long strings
+      if (text.length < 3 || text.length > 100) continue;
       
+      // Skip obvious metadata
+      if (/^(Identity|Adobe|UCS|HiQPdf|PDF|CMap|Type|Font|Resource)$/i.test(text)) continue;
+      if (/^[\d\.\-\s]+$/.test(text) && text.length < 8) continue;
+      
+      // Only include text with letters
       if (/[a-zA-Z]{2,}/.test(text) && !seenTexts.has(text.toLowerCase())) {
         seenTexts.add(text.toLowerCase());
-        extractedText += text + ' ';
+        textMatches.push(text);
       }
     }
     
-    extractedText = extractedText.replace(/\s+/g, ' ').trim();
+    // Pattern 2: Look for BT/ET blocks (text blocks in PDF)
+    const btEtRegex = /BT\s+.*?ET/gs;
+    const btEtMatches = pdfContent.match(btEtRegex) || [];
     
-    if (extractedText.length > 20) {
-      return `⚠️ Azure OpenAI extraction failed, used fallback method.
-
-Azure Error: ${azureError}
-
-📝 Fallback extracted text:
-${extractedText}
-
-💡 For better results:
-1. Try uploading a different PDF format
-2. Use OCR tools for scanned documents
-3. Copy and paste text directly if selectable`;
+    for (const block of btEtMatches) {
+      const blockParenthesesRegex = /\(([^)]+)\)/g;
+      let blockMatch;
+      
+      while ((blockMatch = blockParenthesesRegex.exec(block)) !== null) {
+        let text = blockMatch[1];
+        text = text.replace(/\\[nrt]/g, ' ').trim();
+        
+        if (text.length >= 3 && text.length <= 100 && 
+            /[a-zA-Z]{2,}/.test(text) && 
+            !seenTexts.has(text.toLowerCase())) {
+          seenTexts.add(text.toLowerCase());
+          textMatches.push(text);
+        }
+      }
     }
     
-    return `❌ Both Azure OpenAI and fallback extraction failed.
+    // Pattern 3: Look for Tj and TJ operators (text showing operators)
+    const tjRegex = /\(([^)]+)\)\s*[Tt][jJ]/g;
+    while ((match = tjRegex.exec(pdfContent)) !== null) {
+      let text = match[1];
+      text = text.replace(/\\[nrt]/g, ' ').trim();
+      
+      if (text.length >= 3 && text.length <= 100 && 
+          /[a-zA-Z]{2,}/.test(text) && 
+          !seenTexts.has(text.toLowerCase())) {
+        seenTexts.add(text.toLowerCase());
+        textMatches.push(text);
+      }
+    }
+    
+    let extractedText = textMatches.join(' ');
+    extractedText = extractedText.replace(/\s+/g, ' ').trim();
+    
+    if (extractedText.length > 50) {
+      console.log(`✅ Successfully extracted ${extractedText.length} characters from PDF`);
+      console.log(`📋 Sample extracted text: "${extractedText.substring(0, 200)}..."`);
+      return extractedText;
+    }
+    
+    // If we got minimal text, provide helpful guidance
+    return `📄 PDF Text Extraction Complete
 
-Azure Error: ${azureError}
+⚠️ Limited text could be extracted from this PDF (${extractedText.length} characters).
+
+This could mean:
+- The PDF is scanned/image-based and requires OCR
+- The document uses complex formatting or embedded fonts
+- The PDF may be password-protected or corrupted
+- The file contains mostly images/graphics
+
+📝 Extracted content: "${extractedText}"
+
+🔧 Recommendations:
+1. **Try manual copy-paste**: If you can select text in a PDF viewer, copy and paste it directly
+2. **Use OCR tools**: For scanned documents, try:
+   - Adobe Acrobat Pro (OCR feature)
+   - Google Drive (upload PDF, it will OCR automatically)
+   - Online OCR services like SmallPDF or PDFCandy
+3. **Re-scan with better quality**: If it's a scanned document, try higher resolution
+4. **Check file format**: Ensure the PDF opens properly in other applications
+
+💡 For best results with medical/lab reports, OCR tools specifically designed for document processing work best.`;
+    
+  } catch (error) {
+    console.error('💥 PDF extraction error:', error);
+    console.error('💥 Error details:', error.message);
+    
+    return `❌ PDF extraction failed: ${error.message}
 
 🔧 This PDF appears to be:
-- Scanned/image-based requiring OCR
-- Password protected or corrupted
+- Corrupted or password protected
 - Using unsupported encoding
+- Too complex for basic text extraction
 
 💡 Please try:
 1. Copy and paste text directly from a PDF viewer
 2. Use OCR tools: Adobe Acrobat, Google Drive, smallpdf.com
 3. Convert to a different format and try again`;
-    
-  } catch (fallbackError) {
-    console.error('💥 Fallback extraction also failed:', fallbackError);
-    return `❌ Complete PDF extraction failure.
-
-Azure Error: ${azureError}
-Fallback Error: ${fallbackError.message}
-
-Please try manual text entry or OCR tools.`;
   }
 }
+
 
 async function extractFromDocx(uint8Array: Uint8Array): Promise<string> {
   try {
