@@ -20,6 +20,7 @@ import MedicalDataProcessor from '@/components/MedicalDataProcessor';
 import SQLEditor from '@/components/SQLEditor';
 import DatabaseDashboard from '@/components/DatabaseDashboard';
 import SimpleTableViewer from '@/components/SimpleTableViewer';
+import HealthKitSync from '@/components/HealthKitSync';
 import { useAuth } from '@/components/AuthProvider';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -245,6 +246,9 @@ const Dashboard = () => {
                 )}
               </CardContent>
             </Card>
+
+            {/* Health Data Integration */}
+            <HealthKitSync userId={user.id} />
 
             {/* Quick Actions */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
