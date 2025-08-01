@@ -110,166 +110,141 @@ serve(async (req) => {
 
 async function extractFromPDF(uint8Array: Uint8Array): Promise<string> {
   try {
-    console.log('🔍 Starting advanced PDF text extraction...');
+    console.log('🔍 Starting PDF text extraction...');
+    console.log(`📄 PDF size: ${uint8Array.length} bytes`);
     
-    // Try PDF-Parse library first for proper PDF parsing - with proper error handling
-    let pdfParseText = '';
-    try {
-      console.log('📚 Attempting to import pdf-parse library...');
-      const pdfParse = await import('https://esm.sh/pdf-parse@1.1.1');
-      console.log('✅ pdf-parse imported successfully');
-      
-      console.log('🔄 Running pdf-parse on document...');
-      const data = await pdfParse.default(uint8Array);
-      console.log(`📄 PDF Info: ${data.numpages} pages, Title: ${data.info?.Title || 'No title'}`);
-      
-      if (data.text && data.text.trim().length > 50) {
-        console.log(`✅ Successfully extracted ${data.text.length} characters using pdf-parse`);
-        console.log(`📝 Sample: "${data.text.substring(0, 200)}..."`);
-        return data.text;
-      } else {
-        console.log('⚠️ pdf-parse extracted minimal text, trying fallback methods...');
-        pdfParseText = data.text || '';
-      }
-    } catch (pdfParseError) {
-      console.error('❌ pdf-parse failed with error:', pdfParseError);
-      console.log('🔄 Falling back to manual extraction...');
-    }
-
-    // Fallback to manual extraction
+    // Convert to text for analysis
     const textDecoder = new TextDecoder('utf-8', { fatal: false });
     const pdfContent = textDecoder.decode(uint8Array);
     
+    // Analyze PDF structure
     console.log('🔍 Analyzing PDF structure...');
     const hasTextObjects = pdfContent.includes('BT') && pdfContent.includes('ET');
     const hasStreams = pdfContent.includes('stream') && pdfContent.includes('endstream');
     const hasImages = pdfContent.includes('/Image') || pdfContent.includes('/XObject');
     const hasFont = pdfContent.includes('/Font');
+    const hasFlateFilter = pdfContent.includes('/FlateDecode');
     
-    console.log(`📊 PDF Analysis:
+    console.log(`📊 PDF Structure Analysis:
     - Text objects (BT/ET): ${hasTextObjects}
     - Content streams: ${hasStreams}
-    - Images detected: ${hasImages}
-    - Fonts present: ${hasFont}
+    - Images: ${hasImages}
+    - Fonts: ${hasFont}
+    - Compressed content: ${hasFlateFilter}
     - Content length: ${pdfContent.length} chars`);
     
     let extractedText = '';
     let extractionMethod = '';
     
-    // Method 1: Extract from PDF text objects using improved regex
-    if (hasTextObjects) {
-      console.log('🎯 Method 1: Enhanced text objects extraction...');
-      extractionMethod = 'Enhanced Text Objects';
+    // Method 1: Extract text from parentheses (most reliable for simple PDFs)
+    console.log('🎯 Method 1: Text from parentheses...');
+    const parenthesesRegex = /\(([^)]+)\)/g;
+    let match;
+    const seenTexts = new Set();
+    let parenthesesCount = 0;
+    
+    while ((match = parenthesesRegex.exec(pdfContent)) !== null) {
+      parenthesesCount++;
+      let text = match[1];
       
-      // More comprehensive text extraction patterns
-      const patterns = [
-        // Standard text showing operators
-        /\(([^)]+)\)\s*Tj/g,
-        /\[([^\]]*)\]\s*TJ/g,
-        // Text positioning with content
-        /\(([^)]+)\)\s*[\d\s\.-]*\s*Td/g,
-        // Text with spacing adjustments
-        /\(([^)]+)\)\s*[\d\s\.-]*\s*[Tt][jJdDmM]/g,
+      // Skip common PDF metadata
+      if (/^(Identity|Adobe|UCS|CMap|Type|Font|Encoding|BaseFont|Times|Helvetica|Arial)$/i.test(text)) {
+        continue;
+      }
+      
+      // Clean escape sequences
+      text = text
+        .replace(/\\n/g, '\n')
+        .replace(/\\r/g, '\r')
+        .replace(/\\t/g, '\t')
+        .replace(/\\(.)/g, '$1');
+      
+      // Filter for meaningful text
+      if (text.length > 1 && 
+          text.length < 200 && 
+          /[a-zA-Z]/.test(text) && 
+          !/^[\d\.\-\s\\/\\]+$/.test(text) &&
+          !seenTexts.has(text.toLowerCase())) {
+        
+        seenTexts.add(text.toLowerCase());
+        extractedText += text + ' ';
+      }
+    }
+    
+    console.log(`📝 Found ${parenthesesCount} parentheses patterns, extracted ${extractedText.length} chars`);
+    
+    // Method 2: Enhanced text object extraction if Method 1 insufficient
+    if (extractedText.trim().length < 100 && hasTextObjects) {
+      console.log('🔄 Method 2: Text objects extraction...');
+      extractionMethod = 'Text Objects';
+      
+      // More comprehensive patterns for text extraction
+      const textPatterns = [
+        /\(([^)]+)\)\s*Tj/g,                    // Simple text show
+        /\[([^\]]*)\]\s*TJ/g,                   // Array text show
+        /\(([^)]+)\)\s*[\d\s\.-]*\s*Td/g,      // Text with positioning
+        /\(([^)]+)\)\s*[\d\s\.-]*\s*[Tt][jJdDmM]/g, // Text with operators
       ];
       
-      for (const pattern of patterns) {
-        let match;
-        while ((match = pattern.exec(pdfContent)) !== null) {
-          let text = match[1];
+      for (const pattern of textPatterns) {
+        let textMatch;
+        while ((textMatch = pattern.exec(pdfContent)) !== null) {
+          let text = textMatch[1];
           
-          // Clean up escape sequences
+          // Clean and validate
           text = text
             .replace(/\\n/g, '\n')
             .replace(/\\r/g, '\r')
             .replace(/\\t/g, '\t')
-            .replace(/\\(.)/g, '$1'); // Remove other escape sequences
+            .replace(/\\(.)/g, '$1');
           
-          // Filter out likely metadata or positioning info
           if (text.length > 2 && 
               !/^[\d\.\-\s\\/\\]+$/.test(text) && 
               !/^(Identity|Adobe|UCS|CMap)$/i.test(text) &&
-              /[a-zA-Z]/.test(text)) {
-            extractedText += text + ' ';
-          }
-        }
-      }
-      
-      // Also extract from array format text
-      const arrayTextRegex = /\[\s*(\([^)]+\)(?:\s*[\d\.-]+\s*\([^)]+\))*)\s*\]\s*TJ/g;
-      let arrayMatch;
-      while ((arrayMatch = arrayTextRegex.exec(pdfContent)) !== null) {
-        const arrayContent = arrayMatch[1];
-        const stringRegex = /\(([^)]+)\)/g;
-        let stringMatch;
-        while ((stringMatch = stringRegex.exec(arrayContent)) !== null) {
-          let text = stringMatch[1];
-          if (text.length > 1 && /[a-zA-Z]/.test(text) && 
-              !/^(Identity|Adobe|UCS|CMap)$/i.test(text)) {
+              /[a-zA-Z]/.test(text) &&
+              !seenTexts.has(text.toLowerCase())) {
+            
+            seenTexts.add(text.toLowerCase());
             extractedText += text + ' ';
           }
         }
       }
     }
     
-    // Method 2: Stream content extraction with better filtering
-    if (extractedText.trim().length < 100 && hasStreams) {
-      console.log('🔄 Method 2: Enhanced stream content extraction...');
-      extractionMethod = 'Enhanced Stream Content';
+    // Method 3: Stream content analysis for complex PDFs
+    if (extractedText.trim().length < 50 && hasStreams) {
+      console.log('🔄 Method 3: Stream content extraction...');
+      extractionMethod = 'Stream Content';
       
       const streamRegex = /stream\s*([\s\S]*?)\s*endstream/g;
       let streamMatch;
+      let streamCount = 0;
+      
       while ((streamMatch = streamRegex.exec(pdfContent)) !== null) {
+        streamCount++;
         const streamContent = streamMatch[1];
         
-        // Look for readable text patterns
+        // Look for readable text patterns in streams
         const readablePatterns = [
-          /[A-Za-z]{3,}[\w\s\.,;:!?\-()%\/]{10,}/g,
-          /\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b/g,
+          /\b[A-Z][a-z]+(?:\s+[A-Za-z]+){2,}\b/g,    // Names and phrases
           /\b\d+(?:\.\d+)?\s*[a-zA-Z]+\/[a-zA-Z]+\b/g, // Units like mg/dL
+          /\b[A-Za-z]{4,}(?:\s+[A-Za-z]{3,})*\b/g,     // Longer words
         ];
         
         for (const pattern of readablePatterns) {
           const matches = streamContent.match(pattern) || [];
           for (const match of matches.slice(0, 10)) { // Limit to prevent noise
-            if (match.length > 5 && match.length < 200 && 
-                !/^(Identity|Adobe|UCS|CMap|Type|Font)$/i.test(match)) {
+            if (match.length > 5 && match.length < 100 && 
+                !/^(Identity|Adobe|UCS|CMap|Type|Font)$/i.test(match) &&
+                !seenTexts.has(match.toLowerCase())) {
+              
+              seenTexts.add(match.toLowerCase());
               extractedText += match + ' ';
             }
           }
         }
       }
-    }
-    
-    // Method 3: Generic parentheses extraction with better filtering
-    if (extractedText.trim().length < 50) {
-      console.log('🔄 Method 3: Filtered parentheses extraction...');
-      extractionMethod = 'Filtered Parentheses';
-      
-      const parenthesesRegex = /\(([^)]{2,})\)/g;
-      let match;
-      const seenTexts = new Set(); // Avoid duplicates
-      
-      while ((match = parenthesesRegex.exec(pdfContent)) !== null) {
-        let text = match[1];
-        
-        // Skip common PDF metadata
-        if (/^(Identity|Adobe|UCS|CMap|Type|Font|Encoding|BaseFont)$/i.test(text)) {
-          continue;
-        }
-        
-        // Clean and validate text
-        text = text.replace(/\\[rn]/g, ' ').replace(/\\\\/g, '\\');
-        
-        if (text.length > 3 && 
-            text.length < 150 && 
-            /[a-zA-Z]/.test(text) && 
-            !/^[\d\.\-\s\\/\\]+$/.test(text) &&
-            !seenTexts.has(text.toLowerCase())) {
-          
-          seenTexts.add(text.toLowerCase());
-          extractedText += text + ' ';
-        }
-      }
+      console.log(`📄 Processed ${streamCount} streams`);
     }
     
     // Clean up the final text
@@ -279,53 +254,61 @@ async function extractFromPDF(uint8Array: Uint8Array): Promise<string> {
       .replace(/\s+/g, ' ')
       .trim();
     
-    console.log(`🎯 Extraction completed using ${extractionMethod}`);
-    console.log(`📏 Final text length: ${extractedText.length} characters`);
+    console.log(`🎯 Final extraction results:`);
+    console.log(`📏 Text length: ${extractedText.length} characters`);
     
     if (extractedText.length > 10) {
-      console.log(`📋 Sample extracted text: "${extractedText.substring(0, 300)}..."`);
+      console.log(`📋 Sample: "${extractedText.substring(0, 200)}..."`);
       return extractedText;
     }
     
-    // If still minimal extraction, provide detailed analysis
+    // If extraction yielded minimal results, provide diagnostic info
     const diagnosis = [];
     if (!hasTextObjects) diagnosis.push("No text objects found");
-    if (hasImages && !hasFont) diagnosis.push("Image-based content without fonts");
+    if (hasImages && !hasFont) diagnosis.push("Image-based content");
     if (!hasStreams) diagnosis.push("No content streams");
+    if (hasFlateFilter) diagnosis.push("Compressed content detected");
     
-    return `📄 PDF Analysis Complete - Advanced extraction attempted but yielded minimal text.
+    return `📄 PDF Analysis Complete - Limited text extraction possible.
 
-🔍 PDF Structure Analysis:
+🔍 PDF Diagnostic Report:
 - Text Objects: ${hasTextObjects ? '✅ Present' : '❌ Missing'}
 - Content Streams: ${hasStreams ? '✅ Present' : '❌ Missing'}  
 - Images: ${hasImages ? '✅ Detected' : '❌ None'}
 - Fonts: ${hasFont ? '✅ Present' : '❌ Missing'}
+- Compression: ${hasFlateFilter ? '✅ Detected' : '❌ None'}
 - File size: ${(uint8Array.length / 1024).toFixed(1)} KB
 
-🎯 Diagnosis: ${diagnosis.join(', ') || 'Complex PDF structure'}
+🎯 Assessment: ${diagnosis.join(', ') || 'Complex PDF structure'}
 
-💡 This appears to be a scanned/image-based PDF that requires OCR processing.
+💡 This appears to be a scanned or image-based PDF requiring OCR.
 
 🔧 Recommended Solutions:
-1. Use OCR software (Adobe Acrobat, Google Drive, etc.) to convert to searchable PDF
-2. Copy and paste text directly if it's selectable in a PDF viewer  
-3. Use online OCR services like Google Drive or smallpdf.com
-4. Re-scan the document with OCR enabled
-5. Use mobile OCR apps to capture and convert the content
+1. **OCR Conversion**: Use Adobe Acrobat, Google Drive, or online OCR tools
+2. **Manual Entry**: Copy and paste text if selectable in a PDF viewer
+3. **Mobile OCR**: Use smartphone apps to scan and convert text
+4. **Re-scan**: Create a new PDF with OCR enabled during scanning
+5. **Online Tools**: Try smallpdf.com, PDF24, or similar OCR services
 
 📝 Extracted content: "${extractedText}"`;
     
   } catch (error) {
     console.error('💥 PDF extraction error:', error);
+    console.error('💥 Error details:', error.message);
+    console.error('💥 Error stack:', error.stack);
+    
     return `❌ PDF processing failed: ${error.message}
 
-This could indicate:
+🔧 This could indicate:
 - Password protection 🔒
 - Corrupted file structure 💔
 - Unsupported PDF version 📄
 - Complex compression/encoding 🗜️
 
-Please try copying and pasting the text content directly, or use OCR tools to convert the PDF to text.`;
+💡 Solutions:
+1. Try copying and pasting text directly from a PDF viewer
+2. Use OCR tools to convert the PDF to searchable text
+3. Save the PDF as a different format and try again`;
   }
 }
 
