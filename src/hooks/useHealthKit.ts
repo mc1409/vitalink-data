@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { useToast } from '@/hooks/use-toast';
+import { CapacitorHealthkit } from '@perfood/capacitor-healthkit';
 
 interface HealthKitHook {
   isAvailable: boolean;
@@ -42,13 +43,39 @@ export const useHealthKit = (): HealthKitHook => {
 
     setIsLoading(true);
     try {
-      // In a real implementation, this would use native iOS HealthKit APIs
-      // through Capacitor's bridge. For now, we simulate the connection.
+      // Request permissions for various health data types
+      const permissions = {
+        all: [
+          'stepCount',
+          'distanceWalkingRunning', 
+          'activeEnergyBurned',
+          'basalEnergyBurned',
+          'heartRate',
+          'restingHeartRate',
+          'walkingHeartRateAverage',
+          'heartRateVariabilitySDNN',
+          'sleepAnalysis',
+          'bodyMass',
+          'bodyFatPercentage'
+        ],
+        read: [
+          'stepCount',
+          'distanceWalkingRunning', 
+          'activeEnergyBurned',
+          'basalEnergyBurned',
+          'heartRate',
+          'restingHeartRate',
+          'walkingHeartRateAverage',
+          'heartRateVariabilitySDNN',
+          'sleepAnalysis',
+          'bodyMass',
+          'bodyFatPercentage'
+        ],
+        write: []
+      };
+
+      await CapacitorHealthkit.requestAuthorization(permissions);
       
-      // Simulate permission request
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      // Store connection status
       localStorage.setItem('healthkit_connected', 'true');
       setIsConnected(true);
       
@@ -61,7 +88,7 @@ export const useHealthKit = (): HealthKitHook => {
       console.error('HealthKit connection failed:', error);
       toast({
         title: "Connection Failed",
-        description: "Failed to connect to HealthKit",
+        description: "Failed to connect to HealthKit. Please grant permissions.",
         variant: "destructive"
       });
       throw error;
@@ -88,24 +115,115 @@ export const useHealthKit = (): HealthKitHook => {
 
     setIsLoading(true);
     try {
-      // Mock health data - in real implementation, this would fetch from HealthKit
+      const today = new Date();
+      const startDate = new Date(today.getTime() - 24 * 60 * 60 * 1000); // Last 24 hours
+      
+      // Fetch real HealthKit data
+      const [
+        stepsResult,
+        distanceResult,
+        activeCaloriesResult,
+        basalCaloriesResult,
+        heartRateResult,
+        sleepResult,
+        weightResult,
+        bodyFatResult
+      ] = await Promise.allSettled([
+        CapacitorHealthkit.queryHKitSampleType({
+          sampleName: 'stepCount',
+          startDate: startDate.toISOString(),
+          endDate: today.toISOString(),
+          limit: 100
+        }),
+        CapacitorHealthkit.queryHKitSampleType({
+          sampleName: 'distanceWalkingRunning',
+          startDate: startDate.toISOString(),
+          endDate: today.toISOString(),
+          limit: 100
+        }),
+        CapacitorHealthkit.queryHKitSampleType({
+          sampleName: 'activeEnergyBurned',
+          startDate: startDate.toISOString(),
+          endDate: today.toISOString(),
+          limit: 100
+        }),
+        CapacitorHealthkit.queryHKitSampleType({
+          sampleName: 'basalEnergyBurned',
+          startDate: startDate.toISOString(),
+          endDate: today.toISOString(),
+          limit: 100
+        }),
+        CapacitorHealthkit.queryHKitSampleType({
+          sampleName: 'heartRate',
+          startDate: startDate.toISOString(),
+          endDate: today.toISOString(),
+          limit: 100
+        }),
+        CapacitorHealthkit.queryHKitSampleType({
+          sampleName: 'sleepAnalysis',
+          startDate: startDate.toISOString(),
+          endDate: today.toISOString(),
+          limit: 10
+        }),
+        CapacitorHealthkit.queryHKitSampleType({
+          sampleName: 'bodyMass',
+          startDate: startDate.toISOString(),
+          endDate: today.toISOString(),
+          limit: 1
+        }),
+        CapacitorHealthkit.queryHKitSampleType({
+          sampleName: 'bodyFatPercentage',
+          startDate: startDate.toISOString(),
+          endDate: today.toISOString(),
+          limit: 1
+        })
+      ]);
+
+      // Process the results with proper type safety
       const healthData = {
-        steps: Math.floor(Math.random() * 5000) + 5000,
-        distance: Math.round((Math.random() * 3 + 2) * 100) / 100,
-        activeCalories: Math.floor(Math.random() * 300) + 200,
-        totalCalories: Math.floor(Math.random() * 800) + 1200,
-        heartRate: Math.floor(Math.random() * 40) + 60,
-        sleepHours: Math.round((Math.random() * 3 + 6) * 10) / 10,
-        weight: Math.round((Math.random() * 30 + 60) * 10) / 10,
-        bodyFat: Math.round((Math.random() * 20 + 10) * 10) / 10,
+        steps: stepsResult.status === 'fulfilled' && (stepsResult.value as any)?.resultData?.length > 0 
+          ? (stepsResult.value as any).resultData.reduce((sum: number, item: any) => sum + (Number(item.value) || 0), 0) 
+          : 0,
+        distance: distanceResult.status === 'fulfilled' && (distanceResult.value as any)?.resultData?.length > 0
+          ? Math.round((distanceResult.value as any).resultData.reduce((sum: number, item: any) => sum + (Number(item.value) || 0), 0) * 100) / 100
+          : 0,
+        activeCalories: activeCaloriesResult.status === 'fulfilled' && (activeCaloriesResult.value as any)?.resultData?.length > 0
+          ? Math.round((activeCaloriesResult.value as any).resultData.reduce((sum: number, item: any) => sum + (Number(item.value) || 0), 0))
+          : 0,
+        totalCalories: 0, // Will be calculated from active + basal
+        heartRate: heartRateResult.status === 'fulfilled' && (heartRateResult.value as any)?.resultData?.length > 0
+          ? Math.round((heartRateResult.value as any).resultData.reduce((sum: number, item: any) => sum + (Number(item.value) || 0), 0) / (heartRateResult.value as any).resultData.length)
+          : 0,
+        sleepHours: sleepResult.status === 'fulfilled' && (sleepResult.value as any)?.resultData?.length > 0
+          ? Math.round((sleepResult.value as any).resultData.reduce((sum: number, item: any) => {
+              const start = new Date(item.startDate);
+              const end = new Date(item.endDate);
+              return sum + (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+            }, 0) * 10) / 10
+          : 0,
+        weight: weightResult.status === 'fulfilled' && (weightResult.value as any)?.resultData?.length > 0
+          ? Math.round(Number((weightResult.value as any).resultData[0].value) * 10) / 10
+          : 0,
+        bodyFat: bodyFatResult.status === 'fulfilled' && (bodyFatResult.value as any)?.resultData?.length > 0
+          ? Math.round(Number((bodyFatResult.value as any).resultData[0].value) * 10) / 10
+          : 0,
         timestamp: new Date().toISOString()
       };
 
-      // Simulate sync delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Calculate total calories
+      const basalCalories = basalCaloriesResult.status === 'fulfilled' && (basalCaloriesResult.value as any)?.resultData?.length > 0
+        ? Math.round((basalCaloriesResult.value as any).resultData.reduce((sum: number, item: any) => sum + (Number(item.value) || 0), 0))
+        : 0;
+      
+      healthData.totalCalories = healthData.activeCalories + basalCalories;
       
       // Update last sync time
       localStorage.setItem('healthkit_last_sync', new Date().toLocaleString());
+      
+      toast({
+        title: "HealthKit Sync Complete",
+        description: `Synced ${Object.keys(healthData).length} data types successfully`,
+      });
       
       return healthData;
       
@@ -113,7 +231,7 @@ export const useHealthKit = (): HealthKitHook => {
       console.error('HealthKit sync failed:', error);
       toast({
         title: "Sync Failed",
-        description: "Failed to sync health data",
+        description: "Failed to sync health data from HealthKit",
         variant: "destructive"
       });
       throw error;
