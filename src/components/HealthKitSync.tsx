@@ -141,8 +141,7 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
 
     setIsLoading(true);
     try {
-      // Mock health data for demonstration
-      // In a real implementation, this would fetch from HealthKit
+      // Mock health data for demonstration - In real app, this comes from useHealthKit hook
       const mockHealthData: HealthKitData = {
         steps: Math.floor(Math.random() * 5000) + 5000, // 5000-10000 steps
         distance: Math.round((Math.random() * 3 + 2) * 100) / 100, // 2-5 km
@@ -155,116 +154,148 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
         date: new Date().toISOString().split('T')[0]
       };
 
-      // Validate user ID
+      // Critical validation checks
       if (!userId || typeof userId !== 'string') {
-        throw new Error('Invalid user ID');
+        throw new Error('User authentication required. Please log in again.');
       }
 
-      // Validate required data exists
-      if (!mockHealthData.date || !mockHealthData.steps) {
-        console.warn('Insufficient health data for sync');
-        throw new Error('Insufficient health data available');
+      if (!mockHealthData.date) {
+        throw new Error('Invalid date in health data');
       }
 
-      // Prepare activity metrics data with proper validation
-      const activityData = {
-        user_id: userId,
-        measurement_date: mockHealthData.date,
-        measurement_timestamp: new Date().toISOString(),
-        steps_count: Math.max(0, Math.floor(mockHealthData.steps)),
-        distance_walked_meters: Math.max(0, Math.round(mockHealthData.distance * 1000)), // Convert km to meters
-        active_calories: Math.max(0, Math.floor(mockHealthData.activeCalories)),
-        total_calories: Math.max(0, Math.floor(mockHealthData.totalCalories)),
-        device_type: 'HealthKit',
-        data_source: 'Apple HealthKit',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
+      // Ensure we have at least some data to sync
+      const hasData = mockHealthData.steps > 0 || mockHealthData.heartRate > 0 || mockHealthData.sleepHours > 0;
+      if (!hasData) {
+        console.warn('No meaningful health data available for sync');
+        toast({
+          title: "No Data Available",
+          description: "No health data available to sync at this time.",
+          variant: "default"
+        });
+        return;
+      }
 
-      // Store activity metrics with conflict resolution
-      try {
-        // First, try to find existing record
-        const { data: existingActivity } = await supabase
-          .from('activity_metrics')
-          .select('id')
-          .eq('user_id', userId)
-          .eq('device_type', 'HealthKit')
-          .eq('measurement_date', mockHealthData.date)
-          .maybeSingle();
+      // Only sync activity data if we have meaningful metrics
+      if (mockHealthData.steps > 0 || mockHealthData.activeCalories > 0) {
+        // Prepare activity metrics data with bulletproof validation
+        const activityData = {
+          user_id: userId,
+          measurement_date: mockHealthData.date,
+          measurement_timestamp: new Date().toISOString(),
+          steps_count: Math.max(0, Math.floor(mockHealthData.steps || 0)),
+          distance_walked_meters: Math.max(0, Math.round((mockHealthData.distance || 0) * 1000)),
+          active_calories: Math.max(0, Math.floor(mockHealthData.activeCalories || 0)),
+          total_calories: Math.max(0, Math.floor(mockHealthData.totalCalories || 0)),
+          device_type: 'HealthKit',
+          data_source: 'Apple HealthKit',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
 
-        if (existingActivity) {
-          // Update existing record
-          const { error: updateError } = await supabase
+        // Store activity metrics with enhanced conflict resolution
+        try {
+          // First, try to find existing record using proper query
+          const { data: existingActivity, error: queryError } = await supabase
             .from('activity_metrics')
-            .update({
-              ...activityData,
-              id: undefined // Remove id from update data
-            })
-            .eq('id', existingActivity.id);
-          
-          if (updateError) throw updateError;
-        } else {
-          // Insert new record
-          const { error: insertError } = await supabase
-            .from('activity_metrics')
-            .insert(activityData);
-          
-          if (insertError) throw insertError;
+            .select('id')
+            .eq('user_id', userId)
+            .eq('device_type', 'HealthKit')
+            .eq('measurement_date', mockHealthData.date)
+            .maybeSingle();
+
+          if (queryError) {
+            console.error('Query error:', queryError);
+            throw new Error(`Database query failed: ${queryError.message}`);
+          }
+
+          if (existingActivity) {
+            // Update existing record
+            const { error: updateError } = await supabase
+              .from('activity_metrics')
+              .update(activityData)
+              .eq('id', existingActivity.id);
+            
+            if (updateError) {
+              console.error('Update error:', updateError);
+              throw new Error(`Failed to update activity data: ${updateError.message}`);
+            }
+          } else {
+            // Insert new record
+            const { error: insertError } = await supabase
+              .from('activity_metrics')
+              .insert([activityData]);
+            
+            if (insertError) {
+              console.error('Insert error:', insertError);
+              throw new Error(`Failed to insert activity data: ${insertError.message}`);
+            }
+          }
+        } catch (activityError: any) {
+          console.error('Activity metrics sync failed:', activityError);
+          throw new Error(`Activity sync failed: ${activityError.message || 'Unknown error'}`);
         }
-      } catch (activityError) {
-        console.error('Activity metrics error:', activityError);
-        throw new Error(`Failed to sync activity data: ${activityError.message}`);
       }
 
-      // Prepare heart rate metrics data with proper validation
-      const heartData = {
-        user_id: userId,
-        measurement_timestamp: new Date().toISOString(),
-        average_heart_rate: Math.max(30, Math.min(220, Math.floor(mockHealthData.heartRate))),
-        max_heart_rate: Math.max(30, Math.min(220, Math.floor(mockHealthData.heartRate + Math.random() * 20))),
-        min_heart_rate: Math.max(30, Math.min(220, Math.floor(mockHealthData.heartRate - Math.random() * 15))),
-        resting_heart_rate: Math.max(30, Math.min(100, Math.floor(mockHealthData.heartRate - Math.random() * 10))),
-        device_type: 'HealthKit',
-        data_source: 'Apple HealthKit',
-        measurement_context: 'daily_sync',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
+      // Only sync heart data if we have meaningful metrics
+      if (mockHealthData.heartRate > 0) {
+        // Prepare heart rate metrics with enhanced validation
+        const heartData = {
+          user_id: userId,
+          measurement_timestamp: new Date().toISOString(),
+          average_heart_rate: Math.max(30, Math.min(220, Math.floor(mockHealthData.heartRate || 0))),
+          max_heart_rate: Math.max(30, Math.min(220, Math.floor((mockHealthData.heartRate || 0) + Math.random() * 20))),
+          min_heart_rate: Math.max(30, Math.min(220, Math.floor((mockHealthData.heartRate || 0) - Math.random() * 15))),
+          resting_heart_rate: Math.max(30, Math.min(100, Math.floor((mockHealthData.heartRate || 0) - Math.random() * 10))),
+          device_type: 'HealthKit',
+          data_source: 'Apple HealthKit',
+          measurement_context: 'daily_sync',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        };
 
-      // Store heart rate metrics with conflict resolution
-      try {
-        // Check for existing heart rate data in the last hour to avoid duplicates
-        const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-        const { data: existingHeart } = await supabase
-          .from('heart_metrics')
-          .select('id')
-          .eq('user_id', userId)
-          .eq('device_type', 'HealthKit')
-          .gte('measurement_timestamp', oneHourAgo)
-          .maybeSingle();
+        // Store heart rate metrics with enhanced conflict resolution
+        try {
+          // Check for existing heart rate data in the last hour to avoid duplicates
+          const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+          const { data: existingHeart, error: queryError } = await supabase
+            .from('heart_metrics')
+            .select('id')
+            .eq('user_id', userId)
+            .eq('device_type', 'HealthKit')
+            .gte('measurement_timestamp', oneHourAgo)
+            .maybeSingle();
 
-        if (existingHeart) {
-          // Update existing record
-          const { error: updateError } = await supabase
-            .from('heart_metrics')
-            .update({
-              ...heartData,
-              id: undefined // Remove id from update data
-            })
-            .eq('id', existingHeart.id);
-          
-          if (updateError) throw updateError;
-        } else {
-          // Insert new record
-          const { error: insertError } = await supabase
-            .from('heart_metrics')
-            .insert(heartData);
-          
-          if (insertError) throw insertError;
+          if (queryError) {
+            console.error('Heart query error:', queryError);
+            throw new Error(`Heart data query failed: ${queryError.message}`);
+          }
+
+          if (existingHeart) {
+            // Update existing record
+            const { error: updateError } = await supabase
+              .from('heart_metrics')
+              .update(heartData)
+              .eq('id', existingHeart.id);
+            
+            if (updateError) {
+              console.error('Heart update error:', updateError);
+              throw new Error(`Failed to update heart data: ${updateError.message}`);
+            }
+          } else {
+            // Insert new record
+            const { error: insertError } = await supabase
+              .from('heart_metrics')
+              .insert([heartData]);
+            
+            if (insertError) {
+              console.error('Heart insert error:', insertError);
+              throw new Error(`Failed to insert heart data: ${insertError.message}`);
+            }
+          }
+        } catch (heartError: any) {
+          console.error('Heart metrics sync failed:', heartError);
+          throw new Error(`Heart sync failed: ${heartError.message || 'Unknown error'}`);
         }
-      } catch (heartError) {
-        console.error('Heart metrics error:', heartError);
-        throw new Error(`Failed to sync heart data: ${heartError.message}`);
       }
 
       // Only sync sleep if we have meaningful data
@@ -284,23 +315,26 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
           updated_at: new Date().toISOString()
         };
 
-        // Store sleep metrics using upsert (this table has unique constraint)
+        // Store sleep metrics using bulletproof upsert
         try {
           const { error: sleepError } = await supabase
             .from('sleep_metrics')
-            .upsert(sleepData, {
+            .upsert([sleepData], {
               onConflict: 'user_id,device_type,sleep_date',
               ignoreDuplicates: false
             });
 
-          if (sleepError) throw sleepError;
-        } catch (sleepError) {
-          console.error('Sleep metrics error:', sleepError);
-          throw new Error(`Failed to sync sleep data: ${sleepError.message}`);
+          if (sleepError) {
+            console.error('Sleep upsert error:', sleepError);
+            throw new Error(`Failed to save sleep data: ${sleepError.message}`);
+          }
+        } catch (sleepError: any) {
+          console.error('Sleep metrics sync failed:', sleepError);
+          throw new Error(`Sleep sync failed: ${sleepError.message || 'Unknown error'}`);
         }
       }
 
-      // Update sync timestamp
+      // Update sync timestamp only after successful sync
       const currentTime = new Date().toLocaleString();
       localStorage.setItem('healthkit_last_sync', currentTime);
       setLastSync(currentTime);
@@ -314,14 +348,21 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
     } catch (error: any) {
       console.error('Health data sync failed:', error);
       
-      // Provide more specific error messages
+      // Enhanced error handling with specific error types
       let errorMessage = "Failed to sync health data. Please try again.";
+      let errorVariant: "default" | "destructive" = "destructive";
+      
       if (error.message?.includes('duplicate key')) {
-        errorMessage = "Data already exists for today. Updating existing records.";
-      } else if (error.message?.includes('permission')) {
-        errorMessage = "Permission denied. Please check your account settings.";
-      } else if (error.message?.includes('network')) {
-        errorMessage = "Network error. Please check your connection and try again.";
+        errorMessage = "Data conflicts detected. Existing records have been updated.";
+        errorVariant = "default";
+      } else if (error.message?.includes('permission') || error.message?.includes('RLS')) {
+        errorMessage = "Permission denied. Please check your account settings and try logging in again.";
+      } else if (error.message?.includes('network') || error.message?.includes('Connection')) {
+        errorMessage = "Network error. Please check your internet connection and try again.";
+      } else if (error.message?.includes('authentication')) {
+        errorMessage = "Session expired. Please log in again.";
+      } else if (error.message?.includes('constraint')) {
+        errorMessage = "Data validation error. Some values may be outside acceptable ranges.";
       } else if (error.message) {
         errorMessage = error.message;
       }
@@ -329,7 +370,7 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
       toast({
         title: "Sync Failed",
         description: errorMessage,
-        variant: "destructive"
+        variant: errorVariant
       });
     } finally {
       setIsLoading(false);
