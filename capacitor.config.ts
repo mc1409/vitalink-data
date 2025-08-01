@@ -1,7 +1,7 @@
 import { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'app.lovable.6b88c1867e514aec9414f3976d33b8fd',
+  appId: 'com.lovable.vitalinkdata',
   appName: 'vitalink-data',
   webDir: 'dist',
   server: {
