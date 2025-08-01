@@ -161,15 +161,23 @@ const DatabaseDashboard = () => {
         .delete()
         .neq('id', ''); // This deletes all records
 
-      if (error) throw error;
+      if (error) {
+        console.error('Delete error details:', error);
+        if (error.code === '42501' || error.message.includes('policy')) {
+          toast.error(`Cannot delete from ${tableName}: Insufficient permissions or delete policy missing`);
+        } else {
+          toast.error(`Failed to clear table: ${error.message}`);
+        }
+        return;
+      }
       
       toast.success(`All data cleared from ${tableName}`);
       setTableData([]);
       setSelectedTable('');
       getTableInfo();
     } catch (error) {
-      toast.error('Failed to clear table');
       console.error('Clear table error:', error);
+      toast.error('Failed to clear table: Unexpected error occurred');
     }
   };
 
