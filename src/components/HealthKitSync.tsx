@@ -155,64 +155,141 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
         date: new Date().toISOString().split('T')[0]
       };
 
-      // Store activity metrics (upsert to handle duplicates)
-      const { error: activityError } = await supabase
-        .from('activity_metrics')
-        .upsert({
-          user_id: userId,
-          measurement_date: mockHealthData.date,
-          measurement_timestamp: new Date().toISOString(),
-          steps_count: mockHealthData.steps,
-          distance_walked_meters: mockHealthData.distance * 1000, // Convert km to meters
-          active_calories: mockHealthData.activeCalories,
-          total_calories: mockHealthData.totalCalories,
-          device_type: 'HealthKit',
-          data_source: 'Apple HealthKit',
-          updated_at: new Date().toISOString()
-        }, {
-          onConflict: 'user_id,device_type,measurement_date'
-        });
+      // Validate user ID
+      if (!userId || typeof userId !== 'string') {
+        throw new Error('Invalid user ID');
+      }
 
-      if (activityError) throw activityError;
+      // Prepare activity metrics data with proper validation
+      const activityData = {
+        user_id: userId,
+        measurement_date: mockHealthData.date,
+        measurement_timestamp: new Date().toISOString(),
+        steps_count: Math.max(0, Math.floor(mockHealthData.steps)),
+        distance_walked_meters: Math.max(0, Math.round(mockHealthData.distance * 1000)), // Convert km to meters
+        active_calories: Math.max(0, Math.floor(mockHealthData.activeCalories)),
+        total_calories: Math.max(0, Math.floor(mockHealthData.totalCalories)),
+        device_type: 'HealthKit',
+        data_source: 'Apple HealthKit',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
 
-      // Store heart rate metrics (upsert to handle duplicates)
-      const { error: heartError } = await supabase
-        .from('heart_metrics')
-        .upsert({
-          user_id: userId,
-          measurement_timestamp: new Date().toISOString(),
-          average_heart_rate: mockHealthData.heartRate,
-          max_heart_rate: mockHealthData.heartRate + Math.floor(Math.random() * 20),
-          min_heart_rate: mockHealthData.heartRate - Math.floor(Math.random() * 15),
-          resting_heart_rate: mockHealthData.heartRate - Math.floor(Math.random() * 10),
-          device_type: 'HealthKit',
-          data_source: 'Apple HealthKit',
-          updated_at: new Date().toISOString()
-        }, {
-          onConflict: 'user_id,device_type,measurement_timestamp'
-        });
+      // Store activity metrics with conflict resolution
+      try {
+        // First, try to find existing record
+        const { data: existingActivity } = await supabase
+          .from('activity_metrics')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('device_type', 'HealthKit')
+          .eq('measurement_date', mockHealthData.date)
+          .maybeSingle();
 
-      if (heartError) throw heartError;
+        if (existingActivity) {
+          // Update existing record
+          const { error: updateError } = await supabase
+            .from('activity_metrics')
+            .update({
+              ...activityData,
+              id: undefined // Remove id from update data
+            })
+            .eq('id', existingActivity.id);
+          
+          if (updateError) throw updateError;
+        } else {
+          // Insert new record
+          const { error: insertError } = await supabase
+            .from('activity_metrics')
+            .insert(activityData);
+          
+          if (insertError) throw insertError;
+        }
+      } catch (activityError) {
+        console.error('Activity metrics error:', activityError);
+        throw new Error(`Failed to sync activity data: ${activityError.message}`);
+      }
 
-      // Store sleep metrics if available (upsert to handle duplicates)
-      const { error: sleepError } = await supabase
-        .from('sleep_metrics')
-        .upsert({
-          user_id: userId,
-          sleep_date: mockHealthData.date,
-          total_sleep_time: Math.round(mockHealthData.sleepHours * 60), // Convert hours to minutes
-          deep_sleep_minutes: Math.round(mockHealthData.sleepHours * 60 * 0.3),
-          light_sleep_minutes: Math.round(mockHealthData.sleepHours * 60 * 0.7),
-          time_in_bed: Math.round(mockHealthData.sleepHours * 60 + Math.random() * 30), // Add some variation
-          sleep_efficiency: Math.round((mockHealthData.sleepHours / (mockHealthData.sleepHours + 0.5)) * 100), // Mock efficiency
-          device_type: 'HealthKit',
-          data_source: 'Apple HealthKit',
-          updated_at: new Date().toISOString()
-        }, {
-          onConflict: 'user_id,device_type,sleep_date'
-        });
+      // Prepare heart rate metrics data with proper validation
+      const heartData = {
+        user_id: userId,
+        measurement_timestamp: new Date().toISOString(),
+        average_heart_rate: Math.max(30, Math.min(220, Math.floor(mockHealthData.heartRate))),
+        max_heart_rate: Math.max(30, Math.min(220, Math.floor(mockHealthData.heartRate + Math.random() * 20))),
+        min_heart_rate: Math.max(30, Math.min(220, Math.floor(mockHealthData.heartRate - Math.random() * 15))),
+        resting_heart_rate: Math.max(30, Math.min(100, Math.floor(mockHealthData.heartRate - Math.random() * 10))),
+        device_type: 'HealthKit',
+        data_source: 'Apple HealthKit',
+        measurement_context: 'daily_sync',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
 
-      if (sleepError) throw sleepError;
+      // Store heart rate metrics with conflict resolution
+      try {
+        // Check for existing heart rate data in the last hour to avoid duplicates
+        const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+        const { data: existingHeart } = await supabase
+          .from('heart_metrics')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('device_type', 'HealthKit')
+          .gte('measurement_timestamp', oneHourAgo)
+          .maybeSingle();
+
+        if (existingHeart) {
+          // Update existing record
+          const { error: updateError } = await supabase
+            .from('heart_metrics')
+            .update({
+              ...heartData,
+              id: undefined // Remove id from update data
+            })
+            .eq('id', existingHeart.id);
+          
+          if (updateError) throw updateError;
+        } else {
+          // Insert new record
+          const { error: insertError } = await supabase
+            .from('heart_metrics')
+            .insert(heartData);
+          
+          if (insertError) throw insertError;
+        }
+      } catch (heartError) {
+        console.error('Heart metrics error:', heartError);
+        throw new Error(`Failed to sync heart data: ${heartError.message}`);
+      }
+
+      // Prepare sleep metrics data with proper validation
+      const sleepData = {
+        user_id: userId,
+        sleep_date: mockHealthData.date,
+        total_sleep_time: Math.max(0, Math.min(1440, Math.round(mockHealthData.sleepHours * 60))), // Convert hours to minutes, max 24 hours
+        deep_sleep_minutes: Math.max(0, Math.round(mockHealthData.sleepHours * 60 * 0.3)),
+        light_sleep_minutes: Math.max(0, Math.round(mockHealthData.sleepHours * 60 * 0.7)),
+        time_in_bed: Math.max(0, Math.round(mockHealthData.sleepHours * 60 + Math.random() * 30)), // Add some variation
+        sleep_efficiency: Math.max(0, Math.min(100, Math.round((mockHealthData.sleepHours / (mockHealthData.sleepHours + 0.5)) * 100))), // Mock efficiency
+        device_type: 'HealthKit',
+        data_source: 'Apple HealthKit',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+
+      // Store sleep metrics using upsert (this table has unique constraint)
+      try {
+        const { error: sleepError } = await supabase
+          .from('sleep_metrics')
+          .upsert(sleepData, {
+            onConflict: 'user_id,device_type,sleep_date',
+            ignoreDuplicates: false
+          });
+
+        if (sleepError) throw sleepError;
+      } catch (sleepError) {
+        console.error('Sleep metrics error:', sleepError);
+        throw new Error(`Failed to sync sleep data: ${sleepError.message}`);
+      }
 
       // Update sync timestamp
       const currentTime = new Date().toLocaleString();
@@ -225,11 +302,24 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
         variant: "default"
       });
 
-    } catch (error) {
+    } catch (error: any) {
       console.error('Health data sync failed:', error);
+      
+      // Provide more specific error messages
+      let errorMessage = "Failed to sync health data. Please try again.";
+      if (error.message?.includes('duplicate key')) {
+        errorMessage = "Data already exists for today. Updating existing records.";
+      } else if (error.message?.includes('permission')) {
+        errorMessage = "Permission denied. Please check your account settings.";
+      } else if (error.message?.includes('network')) {
+        errorMessage = "Network error. Please check your connection and try again.";
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       toast({
         title: "Sync Failed",
-        description: "Failed to sync health data. Please try again.",
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {
