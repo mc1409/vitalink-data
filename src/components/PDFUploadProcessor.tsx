@@ -155,8 +155,63 @@ const PDFUploadProcessor: React.FC = () => {
     return extension || 'unknown';
   };
 
-  // Extract text from document using server-side function
-  const extractTextFromDocument = useCallback(async (file: File): Promise<string> => {
+  // Extract text from PDF using client-side pdfjs-dist
+  const extractTextFromPDF = useCallback(async (file: File): Promise<string> => {
+    try {
+      updateProcessingStep('extract', 'processing', 'Loading PDF document...');
+      
+      // Dynamic import of pdfjs-dist to avoid SSR issues
+      const pdfjsLib = await import('pdfjs-dist');
+      
+      // Set worker path
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      
+      // Convert file to array buffer
+      const arrayBuffer = await file.arrayBuffer();
+      const uint8Array = new Uint8Array(arrayBuffer);
+      
+      updateProcessingStep('extract', 'processing', 'Parsing PDF structure...');
+      
+      // Load the PDF document
+      const pdf = await pdfjsLib.getDocument({ data: uint8Array }).promise;
+      const numPages = pdf.numPages;
+      
+      updateProcessingStep('extract', 'processing', `Extracting text from ${numPages} pages...`);
+      
+      let extractedText = '';
+      
+      // Extract text from each page
+      for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+        const page = await pdf.getPage(pageNum);
+        const textContent = await page.getTextContent();
+        
+        // Combine text items from the page
+        const pageText = textContent.items
+          .map((item: any) => item.str)
+          .join(' ');
+        
+        extractedText += `Page ${pageNum}:\n${pageText}\n\n`;
+        
+        // Update progress
+        setProgress((pageNum / numPages) * 100);
+      }
+      
+      if (!extractedText || extractedText.trim().length === 0) {
+        throw new Error('No readable text found in the PDF. This may be a scanned document that requires OCR.');
+      }
+      
+      updateProcessingStep('extract', 'completed', `Successfully extracted ${extractedText.length} characters from ${numPages} pages`);
+      return extractedText.trim();
+      
+    } catch (error: any) {
+      console.error('PDF extraction failed:', error);
+      updateProcessingStep('extract', 'error', error.message);
+      throw error;
+    }
+  }, [updateProcessingStep]);
+
+  // Extract text from other document types using existing method
+  const extractTextFromOtherDocuments = useCallback(async (file: File): Promise<string> => {
     try {
       updateProcessingStep('extract', 'processing', 'Analyzing document structure...');
       
@@ -194,6 +249,17 @@ const PDFUploadProcessor: React.FC = () => {
       throw error;
     }
   }, [updateProcessingStep]);
+
+  // Main extraction method that routes to appropriate handler
+  const extractTextFromDocument = useCallback(async (file: File): Promise<string> => {
+    const fileType = getFileType(file);
+    
+    if (fileType === 'pdf') {
+      return extractTextFromPDF(file);
+    } else {
+      return extractTextFromOtherDocuments(file);
+    }
+  }, [extractTextFromPDF, extractTextFromOtherDocuments]);
 
   // Process with AI - Enhanced with detailed logging
   const processWithAI = useCallback(async (text: string, filename: string): Promise<ExtractedData> => {
