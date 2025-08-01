@@ -126,9 +126,25 @@ async function extractFromPDF(uint8Array: Uint8Array): Promise<string> {
     console.log(`🌐 Endpoint: ${azureEndpoint}`);
     console.log(`🚀 Deployment: ${azureDeployment}`);
     
-    // Convert PDF to base64 for sending to Azure OpenAI
-    const base64PDF = btoa(String.fromCharCode(...uint8Array));
-    console.log(`📋 PDF converted to base64 (${base64PDF.length} chars)`);
+    // Convert PDF to base64 safely (avoid stack overflow for large files)
+    console.log('📋 Converting PDF to base64...');
+    let base64PDF = '';
+    try {
+      // Process in chunks to avoid stack overflow with large files
+      const chunkSize = 8192; // 8KB chunks
+      let binaryString = '';
+      
+      for (let i = 0; i < uint8Array.length; i += chunkSize) {
+        const chunk = uint8Array.slice(i, i + chunkSize);
+        binaryString += String.fromCharCode(...chunk);
+      }
+      
+      base64PDF = btoa(binaryString);
+      console.log(`✅ PDF converted to base64 (${base64PDF.length} chars)`);
+    } catch (conversionError) {
+      console.error('❌ Base64 conversion failed:', conversionError.message);
+      throw new Error(`Failed to convert PDF to base64: ${conversionError.message}`);
+    }
     
     // Prepare the prompt for text extraction
     const systemPrompt = `You are an expert medical document text extractor. Your task is to extract ALL readable text from the provided PDF document, focusing especially on medical/lab report content.
