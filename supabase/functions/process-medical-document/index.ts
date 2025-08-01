@@ -58,6 +58,8 @@ LAB_RESULTS (Primary biomarker data):
 - abnormal_flag (text) - ONLY: "normal", "high", "low", "critical_high", "critical_low"
 - reference_range_min (number) - Lower bound of normal range
 - reference_range_max (number) - Upper bound of normal range
+- test_date (date) - Format: YYYY-MM-DD - Date when the test was performed/collected
+- result_date (date) - Format: YYYY-MM-DD - Date when results were reported
 
 HEART_METRICS (Cardiovascular biomarkers):
 - measurement_timestamp (timestamp) - Format: YYYY-MM-DDTHH:MM:SSZ
@@ -132,13 +134,17 @@ REQUIRED RESPONSE FORMAT:
       "result_name": "Hemoglobin",
       "numeric_value": 14.5,
       "units": "g/dL",
-      "abnormal_flag": "normal"
+      "abnormal_flag": "normal",
+      "test_date": "2024-01-15",
+      "reference_range_min": 12.0,
+      "reference_range_max": 15.5
     },
     "LAB_RESULTS_2": {
       "result_name": "Glucose",
       "numeric_value": 95,
       "units": "mg/dL",
-      "abnormal_flag": "normal"
+      "abnormal_flag": "normal",
+      "test_date": "2024-01-15"
     },
     "HEART_METRICS": {
       "measurement_timestamp": "2024-01-15T09:00:00Z",
