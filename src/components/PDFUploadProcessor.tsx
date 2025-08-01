@@ -1,16 +1,9 @@
 import React from 'react';
-import { SimplePDFUploader } from './SimplePDFUploader';
+import EnhancedPDFExtractor from './EnhancedPDFExtractor';
 
-// This component now uses the new simplified PDF upload approach
+// This component now uses the enhanced PDF extractor with OCR support
 const PDFUploadProcessor: React.FC = () => {
-  return (
-    <SimplePDFUploader 
-      enableDatabaseSave={true}
-      onTextExtracted={(text, filename) => {
-        console.log(`Extracted ${text.length} characters from ${filename}`);
-      }}
-    />
-  );
+  return <EnhancedPDFExtractor />;
 };
 
 export default PDFUploadProcessor;
