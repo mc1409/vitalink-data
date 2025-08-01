@@ -110,172 +110,233 @@ serve(async (req) => {
 
 async function extractFromPDF(uint8Array: Uint8Array): Promise<string> {
   try {
-    console.log('🔍 Starting PDF.js text extraction...');
+    console.log('🔍 Starting enhanced PDF text extraction...');
     console.log(`📄 PDF size: ${uint8Array.length} bytes`);
     
-    // Import PDF.js for proper PDF parsing
-    const pdfjsLib = await import('https://esm.sh/pdfjs-dist@4.4.168/build/pdf.min.mjs');
-    
-    // Disable workers for edge function environment
-    pdfjsLib.GlobalWorkerOptions.workerSrc = null;
-    
-    console.log('📚 PDF.js loaded successfully');
-    
-    // Load the PDF document
-    const loadingTask = pdfjsLib.getDocument({
-      data: uint8Array,
-      verbosity: 0, // Reduce logging
-      standardFontDataUrl: null,
-      cMapUrl: null,
-      cMapPacked: false,
-    });
-    
-    const pdfDocument = await loadingTask.promise;
-    console.log(`📄 PDF loaded: ${pdfDocument.numPages} pages`);
-    
-    let fullText = '';
-    
-    // Extract text from each page
-    for (let pageNum = 1; pageNum <= pdfDocument.numPages; pageNum++) {
-      try {
-        console.log(`🔍 Processing page ${pageNum}...`);
+    // Method 1: Try pdf-parse library (most reliable)
+    try {
+      console.log('📚 Attempting pdf-parse extraction...');
+      const pdfParse = await import('https://esm.sh/pdf-parse@1.1.1');
+      
+      console.log('✅ pdf-parse library loaded');
+      
+      const data = await pdfParse.default(uint8Array);
+      
+      console.log(`📄 PDF parsed successfully:`);
+      console.log(`- Pages: ${data.numpages}`);
+      console.log(`- Title: ${data.info?.Title || 'No title'}`);
+      console.log(`- Creator: ${data.info?.Creator || 'Unknown'}`);
+      console.log(`- Text length: ${data.text?.length || 0} characters`);
+      
+      if (data.text && data.text.trim().length > 20) {
+        const cleanText = data.text
+          .replace(/\s+/g, ' ')  // Normalize whitespace
+          .replace(/\f/g, '\n')  // Replace form feeds with newlines
+          .trim();
         
-        const page = await pdfDocument.getPage(pageNum);
-        const textContent = await page.getTextContent();
+        console.log(`✅ Successfully extracted ${cleanText.length} characters`);
+        console.log(`📋 Sample text: "${cleanText.substring(0, 300)}..."`);
         
-        // Extract text items and combine them
-        const pageText = textContent.items
-          .map((item: any) => {
-            if (item.str && typeof item.str === 'string') {
-              return item.str.trim();
-            }
-            return '';
-          })
-          .filter((text: string) => text.length > 0)
-          .join(' ');
-        
-        if (pageText.trim()) {
-          fullText += pageText + '\n';
-          console.log(`✅ Page ${pageNum}: extracted ${pageText.length} characters`);
-        } else {
-          console.log(`⚠️ Page ${pageNum}: no text content found`);
-        }
-        
-        // Clean up page resources
-        page.cleanup();
-        
-      } catch (pageError) {
-        console.error(`❌ Error processing page ${pageNum}:`, pageError.message);
-        continue;
+        return cleanText;
+      } else {
+        console.log('⚠️ pdf-parse returned minimal text, trying alternative methods...');
       }
+      
+    } catch (pdfParseError) {
+      console.error('❌ pdf-parse failed:', pdfParseError.message);
+      console.log('🔄 Trying alternative extraction methods...');
     }
     
-    // Clean up document resources
-    pdfDocument.destroy();
-    
-    // Clean and format the extracted text
-    fullText = fullText
-      .replace(/\s+/g, ' ') // Normalize whitespace
-      .replace(/\n\s*\n/g, '\n') // Remove empty lines
-      .trim();
-    
-    console.log(`🎯 Extraction complete: ${fullText.length} characters total`);
-    
-    if (fullText.length > 10) {
-      console.log(`📋 Sample extracted text: "${fullText.substring(0, 300)}..."`);
-      return fullText;
+    // Method 2: Try pdf2pic + OCR approach (for scanned PDFs)
+    try {
+      console.log('📷 Attempting pdf2pic + OCR extraction...');
+      
+      // Import pdf2pic for converting PDF pages to images
+      const pdf2pic = await import('https://esm.sh/pdf2pic@3.1.3');
+      
+      console.log('✅ pdf2pic loaded, converting PDF to images...');
+      
+      const convert = pdf2pic.fromBuffer(uint8Array, {
+        density: 200,           // DPI
+        saveFilename: "page",
+        savePath: "/tmp",
+        format: "png",
+        width: 2000,
+        height: 2000
+      });
+      
+      let extractedText = '';
+      
+      // Convert first 3 pages maximum to avoid timeout
+      for (let pageNum = 1; pageNum <= 3; pageNum++) {
+        try {
+          const result = await convert(pageNum, { responseType: "buffer" });
+          
+          if (result.buffer) {
+            console.log(`✅ Page ${pageNum} converted to image`);
+            
+            // Here we would normally use OCR, but for now let's indicate it needs OCR
+            extractedText += `[Page ${pageNum} - Image content detected, requires OCR processing]\n`;
+          }
+          
+        } catch (pageError) {
+          console.log(`⚠️ Could not convert page ${pageNum}:`, pageError.message);
+          break;
+        }
+      }
+      
+      if (extractedText.trim()) {
+        return `📷 PDF contains image-based content that requires OCR processing.
+
+${extractedText}
+
+🔧 To extract text from this scanned PDF:
+1. Use Adobe Acrobat Pro with OCR feature
+2. Upload to Google Drive (auto-OCR)
+3. Use online OCR: smallpdf.com/ocr-pdf
+4. Try mobile apps: Adobe Scan, CamScanner
+5. Use desktop OCR software`;
+      }
+      
+    } catch (pdf2picError) {
+      console.log('❌ pdf2pic method failed:', pdf2picError.message);
     }
     
-    // If no text was extracted, it's likely a scanned PDF
-    return `📄 PDF Analysis Complete - No extractable text found.
-
-🔍 PDF Information:
-- Pages: ${pdfDocument?.numPages || 'Unknown'}
-- File size: ${(uint8Array.length / 1024).toFixed(1)} KB
-- Text extraction: Failed (likely scanned/image-based)
-
-💡 This appears to be a scanned PDF that requires OCR processing.
-
-🔧 Recommended Solutions:
-1. **OCR Conversion**: Use Adobe Acrobat with OCR feature
-2. **Google Drive**: Upload to Google Drive, it will auto-OCR and make it searchable
-3. **Online OCR**: Use services like:
-   - smallpdf.com/ocr-pdf
-   - pdf24.org/ocr-pdf
-   - ilovepdf.com/ocr-pdf
-4. **Mobile Apps**: Use Adobe Scan, Microsoft Office Lens, or CamScanner
-5. **Manual Entry**: Copy and paste text if you can select it in a PDF viewer
-
-📝 For best results with lab reports, ensure they're created digitally or scanned with OCR enabled.`;
+    // Method 3: Enhanced manual extraction with better patterns
+    console.log('🔄 Attempting enhanced manual extraction...');
     
-  } catch (error) {
-    console.error('💥 PDF.js extraction error:', error);
-    console.error('💥 Error details:', error.message);
-    
-    // Fallback to basic extraction if PDF.js fails
-    console.log('🔄 Falling back to basic text extraction...');
-    return await basicPDFExtraction(uint8Array);
-  }
-}
-
-// Fallback method for when PDF.js fails
-async function basicPDFExtraction(uint8Array: Uint8Array): Promise<string> {
-  try {
     const textDecoder = new TextDecoder('utf-8', { fatal: false });
     const pdfContent = textDecoder.decode(uint8Array);
     
-    console.log('🔄 Using fallback extraction method...');
+    // Analyze PDF structure
+    const hasTextObjects = pdfContent.includes('BT') && pdfContent.includes('ET');
+    const hasStreams = pdfContent.includes('stream') && pdfContent.includes('endstream');
+    const hasImages = pdfContent.includes('/Image') || pdfContent.includes('/XObject');
+    const hasFont = pdfContent.includes('/Font');
+    const isCompressed = pdfContent.includes('/FlateDecode');
     
-    // Simple parentheses extraction as fallback
-    const parenthesesRegex = /\(([^)]+)\)/g;
-    let match;
+    console.log(`📊 PDF Structure Analysis:
+    - Text objects (BT/ET): ${hasTextObjects}
+    - Content streams: ${hasStreams}
+    - Images: ${hasImages}
+    - Fonts: ${hasFont}
+    - Compressed: ${isCompressed}`);
+    
     let extractedText = '';
-    const seenTexts = new Set();
-    let count = 0;
     
-    while ((match = parenthesesRegex.exec(pdfContent)) !== null && count < 500) {
-      count++;
-      let text = match[1];
+    // Enhanced text extraction patterns
+    const extractionPatterns = [
+      // Text show operators
+      /\(([^)]{2,})\)\s*Tj/g,
+      /\(([^)]{2,})\)\s*TJ/g,
+      // Array text operators
+      /\[\s*\(([^)]+)\)\s*\]\s*TJ/g,
+      // Text with positioning
+      /\(([^)]{2,})\)\s*[\d\s\.-]*\s*Td/g,
+      // General parentheses content
+      /\(([^)]{3,50})\)/g,
+    ];
+    
+    const seenTexts = new Set();
+    let totalMatches = 0;
+    
+    for (const pattern of extractionPatterns) {
+      let match;
+      let patternMatches = 0;
       
-      if (!text || text.length < 2 || text.length > 100) continue;
-      
-      // Basic cleaning
-      text = text.replace(/\\[nrt]/g, ' ').trim();
-      
-      // Skip obvious metadata
-      if (text === 'Identity' || text === 'Adobe' || text === 'UCS' || 
-          text === 'HiQPdf' || /^[\d\.\-\s]+$/.test(text)) continue;
-      
-      if (/[a-zA-Z]/.test(text) && !seenTexts.has(text.toLowerCase())) {
-        seenTexts.add(text.toLowerCase());
-        extractedText += text + ' ';
+      while ((match = pattern.exec(pdfContent)) !== null && totalMatches < 1000) {
+        totalMatches++;
+        patternMatches++;
+        
+        let text = match[1];
+        if (!text) continue;
+        
+        // Clean the text
+        text = text
+          .replace(/\\n/g, ' ')
+          .replace(/\\r/g, ' ')
+          .replace(/\\t/g, ' ')
+          .replace(/\\(.)/g, '$1')
+          .trim();
+        
+        if (!text || text.length < 2) continue;
+        
+        // Skip obvious PDF metadata
+        if (/^(Identity|Adobe|UCS|CMap|Type|Font|HiQPdf|PDF|Creator|Producer|BaseFont|Helvetica|Times|Arial|Courier)$/i.test(text)) {
+          continue;
+        }
+        
+        // Skip hex/binary content
+        if (/^[A-F0-9\s]{8,}$/i.test(text) || /^[\d\.\-\s\\\/]+$/.test(text)) {
+          continue;
+        }
+        
+        // Must contain letters and be reasonable length
+        if (/[a-zA-Z]/.test(text) && text.length <= 100 && !seenTexts.has(text.toLowerCase())) {
+          seenTexts.add(text.toLowerCase());
+          extractedText += text + ' ';
+        }
       }
+      
+      console.log(`📝 Pattern ${extractionPatterns.indexOf(pattern) + 1}: ${patternMatches} matches`);
     }
     
-    extractedText = extractedText.replace(/\s+/g, ' ').trim();
+    // Clean up the final text
+    extractedText = extractedText
+      .replace(/\s+/g, ' ')
+      .trim();
     
-    if (extractedText.length > 10) {
+    console.log(`🎯 Manual extraction complete: ${extractedText.length} characters`);
+    
+    if (extractedText.length > 20) {
+      console.log(`📋 Sample extracted: "${extractedText.substring(0, 200)}..."`);
       return extractedText;
     }
     
-    return `❌ Unable to extract readable text from this PDF.
+    // If all methods failed
+    return `📄 PDF Analysis Complete - Multiple extraction methods attempted.
 
-This PDF may be:
-- Scanned/image-based (requires OCR)
-- Password protected
-- Corrupted or malformed
-- Using unsupported encoding
+🔍 PDF Structure:
+- Pages: Detected
+- Text Objects: ${hasTextObjects ? '✅ Present' : '❌ Missing'}
+- Fonts: ${hasFont ? '✅ Present' : '❌ Missing'}
+- Images: ${hasImages ? '✅ Detected' : '❌ None'}
+- Compression: ${isCompressed ? '✅ Detected' : '❌ None'}
+- File size: ${(uint8Array.length / 1024).toFixed(1)} KB
 
-Please try the OCR solutions mentioned above.`;
+💡 This appears to be a scanned/image-based PDF requiring OCR.
+
+🔧 Recommended OCR Solutions:
+1. **Adobe Acrobat Pro**: Use "Recognize Text" feature
+2. **Google Drive**: Upload PDF, it will auto-OCR
+3. **Online OCR Services**:
+   - smallpdf.com/ocr-pdf
+   - pdf24.org/ocr-pdf  
+   - ilovepdf.com/ocr-pdf
+4. **Mobile Apps**: Adobe Scan, CamScanner, Microsoft Office Lens
+5. **Desktop Software**: ABBYY FineReader, Tesseract OCR
+
+📱 For lab reports, mobile scanning apps often work best as they can enhance image quality before OCR.`;
     
-  } catch (fallbackError) {
-    console.error('💥 Fallback extraction also failed:', fallbackError);
-    return `❌ PDF processing failed completely: ${fallbackError.message}
+  } catch (error) {
+    console.error('💥 Complete PDF extraction failure:', error);
+    console.error('💥 Error name:', error.name);
+    console.error('💥 Error message:', error.message);
+    console.error('💥 Error stack:', error.stack);
+    
+    return `❌ PDF processing completely failed: ${error.message}
 
-Please try:
-1. Converting the PDF to text using Adobe Acrobat
-2. Using online OCR services
-3. Copying and pasting text directly if selectable`;
+🔧 This indicates a serious issue with the PDF file:
+- File may be corrupted or password-protected
+- Unsupported PDF version or encoding
+- File may not actually be a valid PDF
+
+💡 Solutions:
+1. Try opening the PDF in multiple PDF viewers to verify it's valid
+2. If password-protected, remove protection first
+3. Save/export the PDF from the original application again
+4. Copy and paste text directly if selectable in a PDF viewer
+5. Use OCR tools for scanned content`;
   }
 }
 
