@@ -195,20 +195,21 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
         // Store activity metrics with enhanced conflict resolution
         try {
           // First, try to find existing record using proper query with ordering
-          const { data: existingActivity, error: queryError } = await supabase
+          const { data: existingActivities, error: queryError } = await supabase
             .from('activity_metrics')
             .select('id')
             .eq('user_id', userId)
             .eq('device_type', 'HealthKit')
             .eq('measurement_date', mockHealthData.date)
             .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
+            .limit(1);
 
           if (queryError) {
             console.error('Query error:', queryError);
             throw new Error(`Database query failed: ${queryError.message}`);
           }
+
+          const existingActivity = existingActivities && existingActivities.length > 0 ? existingActivities[0] : null;
 
           if (existingActivity) {
             // Update existing record
@@ -259,20 +260,21 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
         try {
           // Check for existing heart rate data in the last hour to avoid duplicates
           const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-          const { data: existingHeart, error: queryError } = await supabase
+          const { data: existingHearts, error: queryError } = await supabase
             .from('heart_metrics')
             .select('id')
             .eq('user_id', userId)
             .eq('device_type', 'HealthKit')
             .gte('measurement_timestamp', oneHourAgo)
             .order('measurement_timestamp', { ascending: false })
-            .limit(1)
-            .maybeSingle();
+            .limit(1);
 
           if (queryError) {
             console.error('Heart query error:', queryError);
             throw new Error(`Heart data query failed: ${queryError.message}`);
           }
+
+          const existingHeart = existingHearts && existingHearts.length > 0 ? existingHearts[0] : null;
 
           if (existingHeart) {
             // Update existing record
