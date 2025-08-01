@@ -11,7 +11,7 @@ import { Loader2, Heart, Activity, Shield } from 'lucide-react';
 import { toast } from 'sonner';
 
 const Auth = () => {
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState('mc14o9all@gmail.com'); // Pre-filled for development
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [error, setError] = useState('');
