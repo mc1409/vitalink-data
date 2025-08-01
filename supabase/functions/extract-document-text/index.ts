@@ -113,63 +113,100 @@ async function extractFromPDF(uint8Array: Uint8Array): Promise<string> {
     const textDecoder = new TextDecoder('utf-8', { fatal: false });
     const pdfContent = textDecoder.decode(uint8Array);
     
+    // Analyze PDF structure first
+    console.log('Analyzing PDF structure...');
+    const hasTextObjects = pdfContent.includes('BT') && pdfContent.includes('ET');
+    const hasStreams = pdfContent.includes('stream') && pdfContent.includes('endstream');
+    const hasImages = pdfContent.includes('/Image') || pdfContent.includes('/XObject');
+    const hasFont = pdfContent.includes('/Font');
+    
+    console.log(`PDF Analysis:
+    - Has text objects (BT/ET): ${hasTextObjects}
+    - Has streams: ${hasStreams}
+    - Has images: ${hasImages}
+    - Has fonts: ${hasFont}
+    - Total content length: ${pdfContent.length} characters`);
+    
     // Extract text content from PDF structure
     let extractedText = '';
+    let extractionMethod = '';
     
     // Method 1: Extract text from PDF text objects
-    const textObjectRegex = /BT\s+(.*?)\s+ET/gs;
-    const textObjects = pdfContent.match(textObjectRegex) || [];
-    
-    for (const textObj of textObjects) {
-      // Extract text from Tj and TJ operators
-      const tjRegex = /\((.*?)\)\s*Tj/g;
-      const arrayRegex = /\[(.*?)\]\s*TJ/g;
+    if (hasTextObjects) {
+      console.log('Trying Method 1: Text objects extraction...');
+      extractionMethod = 'Text Objects';
       
-      let match;
-      while ((match = tjRegex.exec(textObj)) !== null) {
-        const text = match[1].replace(/\\[rn]/g, ' ').replace(/\\\\/g, '\\');
-        if (text.length > 1 && !/^[\d\.\-\s]+$/.test(text)) {
-          extractedText += text + ' ';
-        }
-      }
+      const textObjectRegex = /BT\s+(.*?)\s+ET/gs;
+      const textObjects = pdfContent.match(textObjectRegex) || [];
+      console.log(`Found ${textObjects.length} text objects`);
       
-      while ((match = arrayRegex.exec(textObj)) !== null) {
-        const arrayContent = match[1];
-        const stringRegex = /\((.*?)\)/g;
-        let stringMatch;
-        while ((stringMatch = stringRegex.exec(arrayContent)) !== null) {
-          const text = stringMatch[1].replace(/\\[rn]/g, ' ').replace(/\\\\/g, '\\');
+      for (const textObj of textObjects) {
+        // Extract text from Tj and TJ operators
+        const tjRegex = /\((.*?)\)\s*Tj/g;
+        const arrayRegex = /\[(.*?)\]\s*TJ/g;
+        
+        let match;
+        let tjCount = 0;
+        while ((match = tjRegex.exec(textObj)) !== null) {
+          tjCount++;
+          const text = match[1].replace(/\\[rn]/g, ' ').replace(/\\\\/g, '\\');
           if (text.length > 1 && !/^[\d\.\-\s]+$/.test(text)) {
             extractedText += text + ' ';
           }
+        }
+        
+        let tjArrayCount = 0;
+        while ((match = arrayRegex.exec(textObj)) !== null) {
+          tjArrayCount++;
+          const arrayContent = match[1];
+          const stringRegex = /\((.*?)\)/g;
+          let stringMatch;
+          while ((stringMatch = stringRegex.exec(arrayContent)) !== null) {
+            const text = stringMatch[1].replace(/\\[rn]/g, ' ').replace(/\\\\/g, '\\');
+            if (text.length > 1 && !/^[\d\.\-\s]+$/.test(text)) {
+              extractedText += text + ' ';
+            }
+          }
+        }
+        
+        if (tjCount > 0 || tjArrayCount > 0) {
+          console.log(`Text object had ${tjCount} Tj operators and ${tjArrayCount} TJ arrays`);
         }
       }
     }
     
     // Method 2: If not enough text found, try broader extraction
     if (extractedText.trim().length < 100) {
-      console.log('Using fallback text extraction method...');
+      console.log('Method 1 insufficient, trying Method 2: Parentheses extraction...');
+      extractionMethod = 'Parentheses Pattern';
       
       // Extract text from parentheses (common PDF text storage)
       const parenthesesRegex = /\(([^)]*)\)/g;
       let match;
+      let parenthesesCount = 0;
       while ((match = parenthesesRegex.exec(pdfContent)) !== null) {
+        parenthesesCount++;
         const text = match[1];
         if (text && text.length > 2 && !/^[\d\.\-\s\\/\\]+$/.test(text) && !text.includes('\\')) {
           // Filter out likely non-text content
-          if (!/^[A-Za-z0-9\s\.,;:!?\-()%\/]+$/.test(text)) continue;
-          extractedText += text + ' ';
+          if (/^[A-Za-z0-9\s\.,;:!?\-()%\/]+$/.test(text)) {
+            extractedText += text + ' ';
+          }
         }
       }
+      console.log(`Found ${parenthesesCount} parentheses patterns`);
     }
     
     // Method 3: Extract from stream objects if still not enough
     if (extractedText.trim().length < 50) {
-      console.log('Using stream extraction method...');
+      console.log('Methods 1-2 insufficient, trying Method 3: Stream extraction...');
+      extractionMethod = 'Stream Content';
       
       const streamRegex = /stream\s*([\s\S]*?)\s*endstream/g;
       let streamMatch;
+      let streamCount = 0;
       while ((streamMatch = streamRegex.exec(pdfContent)) !== null) {
+        streamCount++;
         const streamContent = streamMatch[1];
         
         // Look for readable text patterns in streams
@@ -182,6 +219,7 @@ async function extractFromPDF(uint8Array: Uint8Array): Promise<string> {
           }
         }
       }
+      console.log(`Processed ${streamCount} streams`);
     }
     
     // Clean up the extracted text
@@ -191,24 +229,52 @@ async function extractFromPDF(uint8Array: Uint8Array): Promise<string> {
       .replace(/\s+/g, ' ')
       .trim();
     
-    console.log(`Successfully extracted ${extractedText.length} characters from PDF`);
+    console.log(`Extraction completed using ${extractionMethod}. Final text length: ${extractedText.length} characters`);
+    
+    if (extractedText.length > 0) {
+      console.log(`Sample extracted text: "${extractedText.substring(0, 200)}..."`);
+    }
     
     if (extractedText.length < 10) {
-      return `PDF processed but minimal text extracted. This may be an image-based PDF or have complex formatting. 
+      const diagnosis = [];
+      if (!hasTextObjects) diagnosis.push("No text objects found");
+      if (hasImages && !hasFont) diagnosis.push("Contains images but no fonts");
+      if (!hasStreams) diagnosis.push("No content streams");
       
-Extracted content: "${extractedText}"
+      return `PDF Analysis Complete - This appears to be a scanned/image-based PDF.
 
-Please try:
-1. Converting the PDF to text format first
-2. Copying and pasting the text content directly
-3. Using an OCR tool if this is a scanned document`;
+📊 PDF Structure Analysis:
+- Text Objects: ${hasTextObjects ? '✅ Found' : '❌ None'}
+- Content Streams: ${hasStreams ? '✅ Found' : '❌ None'}
+- Images: ${hasImages ? '✅ Detected' : '❌ None'}
+- Fonts: ${hasFont ? '✅ Found' : '❌ None'}
+- File size: ${(uint8Array.length / 1024).toFixed(1)} KB
+
+💡 Diagnosis: ${diagnosis.join(', ') || 'Complex PDF structure'}
+
+🔧 Solutions:
+1. This is likely a scanned lab report - needs OCR (Optical Character Recognition)
+2. Try converting to text format using Adobe Acrobat or similar tool
+3. Copy and paste text directly from the PDF if selectable
+4. Use an online OCR service to convert the images to text
+5. Re-scan the document with OCR enabled
+
+📋 Minimal extracted content: "${extractedText}"`;
     }
     
     return extractedText;
     
   } catch (error) {
     console.error('PDF extraction error:', error);
-    return `PDF processing encountered an error: ${error.message}. Please try copying and pasting the text content directly.`;
+    return `PDF processing encountered an error: ${error.message}. 
+
+This indicates the PDF may have:
+- Password protection
+- Corrupted structure  
+- Non-standard encoding
+- Complex compression
+
+Please try copying and pasting the text content directly.`;
   }
 }
 
