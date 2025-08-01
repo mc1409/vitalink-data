@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Textarea } from '@/components/ui/textarea';
-import { Upload, Copy, Download, Save } from 'lucide-react';
+import { Upload, Copy, Download, Save, Brain } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -194,12 +194,14 @@ const EnhancedPDFExtractor: React.FC = () => {
           filename: extractionResult.filename,
           file_size: selectedFile?.size || 0,
           processing_status: 'completed',
+          ai_analysis_status: 'pending',
           extracted_text_preview: extractedText.substring(0, 1000),
           ai_structured_data: {
             pageCount: extractionResult.pageCount,
             processingTime: extractionResult.processingTime,
             hasOCR: extractionResult.hasOCR,
-            extractionMethod: extractionResult.hasOCR ? 'hybrid_ocr' : 'direct_text'
+            extractionMethod: extractionResult.hasOCR ? 'client_side_ocr' : 'client_side_text',
+            fullText: extractedText
           }
         });
 
@@ -209,6 +211,55 @@ const EnhancedPDFExtractor: React.FC = () => {
     } catch (error: any) {
       console.error('Error saving to database:', error);
       toast.error(`Failed to save: ${error.message}`);
+    }
+  };
+
+  const handleProcessMedicalData = async () => {
+    if (!extractionResult || !extractedText) {
+      toast.error('No extracted text to process');
+      return;
+    }
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        toast.error('You must be logged in to process medical data');
+        return;
+      }
+
+      toast.loading('Processing medical data with AI...');
+
+      const { data, error } = await supabase.functions.invoke('process-medical-document', {
+        body: {
+          filename: extractionResult.filename,
+          extractedText: extractedText
+        }
+      });
+
+      if (error) throw error;
+
+      // Save the processed result to database
+      const { error: saveError } = await supabase
+        .from('document_processing_logs')
+        .insert({
+          user_id: user.id,
+          filename: `${extractionResult.filename}_processed`,
+          file_size: selectedFile?.size || 0,
+          processing_status: 'completed',
+          ai_analysis_status: 'completed',
+          extracted_text_preview: extractedText.substring(0, 1000),
+          ai_structured_data: data,
+          confidence_score: data.confidence || 0.95
+        });
+
+      if (saveError) throw saveError;
+
+      toast.success('Medical data processed and saved successfully!');
+      
+    } catch (error: any) {
+      console.error('Error processing medical data:', error);
+      toast.error(`Failed to process: ${error.message}`);
     }
   };
 
@@ -285,6 +336,10 @@ const EnhancedPDFExtractor: React.FC = () => {
                   <Button variant="outline" size="sm" onClick={handleSaveToDatabase}>
                     <Save className="h-4 w-4 mr-1" />
                     Save to DB
+                  </Button>
+                  <Button variant="default" size="sm" onClick={handleProcessMedicalData}>
+                    <Brain className="h-4 w-4 mr-1" />
+                    Process Medical Data
                   </Button>
                 </div>
               </div>
