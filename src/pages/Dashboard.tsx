@@ -16,7 +16,7 @@ import {
   Heart,
   LogOut
 } from 'lucide-react';
-import MedicalDataProcessor from '@/components/MedicalDataProcessor';
+import PDFUploadProcessor from '@/components/PDFUploadProcessor';
 import SQLEditor from '@/components/SQLEditor';
 import DatabaseDashboard from '@/components/DatabaseDashboard';
 import SimpleTableViewer from '@/components/SimpleTableViewer';
@@ -276,7 +276,7 @@ const Dashboard = () => {
           </TabsContent>
 
           <TabsContent value="upload">
-            <MedicalDataProcessor />
+            <PDFUploadProcessor />
           </TabsContent>
 
           <TabsContent value="database">
