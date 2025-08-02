@@ -244,6 +244,13 @@ const ComprehensiveMedicalProcessor: React.FC<ComprehensiveMedicalProcessorProps
               .gte('created_at', new Date(Date.now() - 60000).toISOString()) // Last minute
               .limit(1);
 
+            console.log('🔍 DUPLICATE CHECK RESULT:', {
+              error: duplicateCheckError,
+              existingRecords: existingRecords,
+              recordCount: existingRecords?.length || 0,
+              shouldSkip: existingRecords && existingRecords.length > 0
+            });
+
             if (duplicateCheckError) {
               console.error('❌ DUPLICATE CHECK ERROR:', duplicateCheckError);
               addLog('Database Save', 'error', `Duplicate check failed for ${data.result_name}: ${duplicateCheckError.message}`);
@@ -251,7 +258,8 @@ const ComprehensiveMedicalProcessor: React.FC<ComprehensiveMedicalProcessorProps
             }
 
             if (existingRecords && existingRecords.length > 0) {
-              addLog('Database Save', 'warning', `⚠️ Skipping duplicate record: ${data.result_name}`);
+              addLog('Database Save', 'warning', `⚠️ Skipping duplicate record: ${data.result_name} (found ${existingRecords.length} existing records)`);
+              console.log('⚠️ SKIPPING DUPLICATE:', existingRecords[0]);
               continue;
             }
 
