@@ -97,12 +97,24 @@ const PatientDocumentUpload: React.FC<PatientDocumentUploadProps> = ({
 
       setUploadStatus(prev => prev ? { ...prev, progress: 75 } : null);
 
-      // Step 3: Process document via edge function
+      // Step 3: Extract text from the uploaded file
+      const { data: extractResult, error: extractError } = await supabase.functions.invoke(
+        'extract-document-text',
+        {
+          body: { storage_path: filePath }
+        }
+      );
+
+      if (extractError) throw extractError;
+      if (!extractResult.success) throw new Error(extractResult.error);
+
+      // Step 4: Process with AI and save to database
       const { data: processResult, error: processError } = await supabase.functions.invoke(
         'process-medical-document',
         {
           body: {
-            storage_path: filePath,
+            text: extractResult.extractedText,
+            filename: file.name,
             patient_id: patientId,
             log_id: logEntry.id
           }
@@ -111,15 +123,62 @@ const PatientDocumentUpload: React.FC<PatientDocumentUploadProps> = ({
 
       if (processError) throw processError;
 
+      // Step 5: Save extracted data to database
+      const extractedData = processResult.extractedFields || {};
+      let savedCount = 0;
+
+      // Save lab results
+      for (const [key, labData] of Object.entries(extractedData)) {
+        if (key.startsWith('LAB_RESULTS') && labData && typeof labData === 'object') {
+          try {
+            const data = labData as any;
+            const { error: saveError } = await supabase
+              .from('clinical_diagnostic_lab_tests')
+              .insert({
+                patient_id: patientId,
+                test_name: data.result_name,
+                test_category: 'lab_work',
+                test_type: 'blood_chemistry',
+                numeric_value: data.numeric_value,
+                result_value: data.numeric_value?.toString(),
+                unit: data.units,
+                reference_range_min: data.reference_range_min,
+                reference_range_max: data.reference_range_max,
+                measurement_time: new Date().toISOString(),
+                data_source: 'document_upload'
+              });
+            
+            if (!saveError) {
+              savedCount++;
+            } else {
+              console.error('Failed to save lab result:', saveError);
+            }
+          } catch (saveError) {
+            console.error('Error saving lab result:', saveError);
+          }
+        }
+      }
+
+      // Update processing log with final status
+      await supabase
+        .from('document_processing_logs')
+        .update({
+          processing_status: 'completed',
+          ai_analysis_status: 'completed',
+          confidence_score: processResult.confidence,
+          ai_structured_data: processResult
+        })
+        .eq('id', logEntry.id);
+
       setUploadStatus({
         fileName: file.name,
         status: 'completed',
         progress: 100,
-        extractedCount: processResult?.extractedDataCount || 0
+        extractedCount: savedCount
       });
 
       toast.success(
-        `Document processed successfully! ${processResult?.extractedDataCount || 0} records extracted.`
+        `Document processed successfully! ${savedCount} lab results saved to database.`
       );
 
     } catch (error: any) {

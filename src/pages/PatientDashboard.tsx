@@ -5,6 +5,7 @@ import PatientSelector from '@/components/PatientSelector';
 import HealthKitSyncPatientCentric from '@/components/HealthKitSyncPatientCentric';
 import PatientBiomarkerDashboard from '@/components/PatientBiomarkerDashboard';
 import PatientDocumentUpload from '@/components/PatientDocumentUpload';
+import ComprehensiveMedicalProcessor from '@/components/ComprehensiveMedicalProcessor';
 import DatabaseDashboard from '@/components/DatabaseDashboard';
 import SimpleTableViewer from '@/components/SimpleTableViewer';
 import { Activity, FileText, Database, Heart, BarChart3 } from 'lucide-react';
@@ -171,10 +172,16 @@ const PatientDashboard: React.FC = () => {
 
         <TabsContent value="upload" className="space-y-6">
           {selectedPatientId ? (
-            <PatientDocumentUpload 
-              patientId={selectedPatientId} 
-              patientName={selectedPatientName}
-            />
+            <div className="space-y-6">
+              <ComprehensiveMedicalProcessor 
+                patientId={selectedPatientId} 
+                patientName={selectedPatientName || undefined}
+              />
+              <PatientDocumentUpload 
+                patientId={selectedPatientId} 
+                patientName={selectedPatientName || undefined}
+              />
+            </div>
           ) : (
             <Card>
               <CardHeader>

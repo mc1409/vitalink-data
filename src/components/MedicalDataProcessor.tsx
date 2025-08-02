@@ -359,10 +359,23 @@ const MedicalDataProcessor: React.FC = () => {
     };
 
     try {
-      const userId = (await supabase.auth.getUser()).data.user?.id;
-      if (!userId) {
+      const user = (await supabase.auth.getUser()).data.user;
+      if (!user) {
         throw new Error('User not authenticated');
       }
+
+      // Get the user's first patient (for this demo)
+      const { data: patients } = await supabase
+        .from('patients')
+        .select('id')
+        .eq('user_id', user.id)
+        .limit(1);
+
+      if (!patients || patients.length === 0) {
+        throw new Error('No patient found. Please create a patient first.');
+      }
+
+      const patientId = patients[0].id;
 
       // Process each extracted data table according to schema
       for (const [tableName, data] of Object.entries(extractedData)) {
@@ -378,16 +391,23 @@ const MedicalDataProcessor: React.FC = () => {
           }
 
           const insertQuery = {
-            ...validData,
-            result_status: validData.result_status || 'final',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
+            patient_id: patientId,
+            test_name: validData.result_name,
+            test_category: 'lab_work',
+            test_type: 'blood_chemistry',
+            numeric_value: validData.numeric_value,
+            result_value: validData.numeric_value?.toString() || validData.result_value,
+            unit: validData.units,
+            reference_range_min: validData.reference_range_min,
+            reference_range_max: validData.reference_range_max,
+            measurement_time: new Date().toISOString(),
+            data_source: 'manual_upload'
           };
 
           addLog('Database Mapping', 'info', `Building query for lab_results:`, { 
-            table: 'lab_results',
+            table: 'clinical_diagnostic_lab_tests',
             query: insertQuery,
-            sql: `INSERT INTO lab_results (${Object.keys(insertQuery).join(', ')}) VALUES (...)`
+            sql: `INSERT INTO clinical_diagnostic_lab_tests (${Object.keys(insertQuery).join(', ')}) VALUES (...)`
           });
 
           const { data: result, error } = await supabase
@@ -400,7 +420,7 @@ const MedicalDataProcessor: React.FC = () => {
             addLog('Database Mapping', 'error', `Lab result insertion failed: ${error.message}`, { error, query: insertQuery });
           } else {
             savedRecords.push({ table: 'clinical_diagnostic_lab_tests', data: result, confidence: 0.95 });
-            addLog('Database Mapping', 'success', `✅ Lab result saved: ${validData.test_name} = ${validData.numeric_value || validData.result_value}`, { 
+            addLog('Database Mapping', 'success', `✅ Lab result saved: ${insertQuery.test_name} = ${insertQuery.numeric_value || insertQuery.result_value}`, { 
               table: 'clinical_diagnostic_lab_tests',
               id: result.id,
               record: result
@@ -421,7 +441,7 @@ const MedicalDataProcessor: React.FC = () => {
 
           const insertQuery = {
             ...validData,
-            patient_id: userId,
+            patient_id: patientId,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
           };
@@ -465,7 +485,7 @@ const MedicalDataProcessor: React.FC = () => {
 
           const insertQuery = {
             ...validData,
-            patient_id: userId
+            patient_id: patientId
           };
 
           const { data: result, error } = await supabase
