@@ -15,7 +15,7 @@ interface Patient {
   last_name: string;
   date_of_birth: string;
   gender?: string;
-  profile_id: string;
+  user_id: string;
 }
 
 interface PatientSelectorProps {
@@ -42,20 +42,16 @@ const PatientSelector: React.FC<PatientSelectorProps> = ({
   const loadPatients = async () => {
     setLoading(true);
     try {
-      // First get the user's profile
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
-        .single();
+      const user = await supabase.auth.getUser();
+      if (!user.data.user) {
+        throw new Error('User not authenticated');
+      }
 
-      if (profileError) throw profileError;
-
-      // Then get patients for this profile
+      // Get patients directly by user_id - simplified approach
       const { data, error } = await supabase
         .from('patients')
-        .select('id, first_name, last_name, date_of_birth, gender, profile_id')
-        .eq('profile_id', profile.id)
+        .select('id, first_name, last_name, date_of_birth, gender, user_id')
+        .eq('user_id', user.data.user.id)
         .order('first_name');
 
       if (error) throw error;
@@ -75,12 +71,17 @@ const PatientSelector: React.FC<PatientSelectorProps> = ({
     }
 
     try {
-      // Get the user's profile ID
+      const user = await supabase.auth.getUser();
+      if (!user.data.user) {
+        throw new Error('User not authenticated');
+      }
+
+      // Get user's profile to link patient
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('id')
-        .eq('user_id', (await supabase.auth.getUser()).data.user?.id)
-        .single();
+        .eq('user_id', user.data.user.id)
+        .maybeSingle();
 
       if (profileError) throw profileError;
 
@@ -88,8 +89,8 @@ const PatientSelector: React.FC<PatientSelectorProps> = ({
         .from('patients')
         .insert({
           ...newPatient,
-          profile_id: profile.id,
-          user_id: (await supabase.auth.getUser()).data.user?.id // Keep for backward compatibility
+          user_id: user.data.user.id,
+          profile_id: profile?.id || null // Optional link to profile
         })
         .select()
         .single();

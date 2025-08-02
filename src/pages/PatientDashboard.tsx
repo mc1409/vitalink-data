@@ -1,15 +1,44 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import PatientSelector from '@/components/PatientSelector';
 import HealthKitSyncPatientCentric from '@/components/HealthKitSyncPatientCentric';
 import PatientBiomarkerDashboard from '@/components/PatientBiomarkerDashboard';
+import PatientDocumentUpload from '@/components/PatientDocumentUpload';
 import DatabaseDashboard from '@/components/DatabaseDashboard';
 import SimpleTableViewer from '@/components/SimpleTableViewer';
 import { Activity, FileText, Database, Heart, BarChart3 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
 const PatientDashboard: React.FC = () => {
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
+  const [selectedPatientName, setSelectedPatientName] = useState<string>('');
+
+  // Load patient info when selection changes
+  useEffect(() => {
+    const loadPatientInfo = async () => {
+      if (!selectedPatientId) {
+        setSelectedPatientName('');
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('patients')
+          .select('first_name, last_name')
+          .eq('id', selectedPatientId)
+          .single();
+
+        if (error) throw error;
+        setSelectedPatientName(`${data.first_name} ${data.last_name}`);
+      } catch (error) {
+        console.error('Error loading patient info:', error);
+        setSelectedPatientName('Selected Patient');
+      }
+    };
+
+    loadPatientInfo();
+  }, [selectedPatientId]);
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -141,15 +170,19 @@ const PatientDashboard: React.FC = () => {
         </TabsContent>
 
         <TabsContent value="upload" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Document Upload</CardTitle>
-              <CardDescription>Document upload will be updated for patient-centric workflow</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground">Feature coming soon with patient-specific document processing.</p>
-            </CardContent>
-          </Card>
+          {selectedPatientId ? (
+            <PatientDocumentUpload 
+              patientId={selectedPatientId} 
+              patientName={selectedPatientName}
+            />
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle>Document Upload</CardTitle>
+                <CardDescription>Please select a patient to upload medical documents</CardDescription>
+              </CardHeader>
+            </Card>
+          )}
         </TabsContent>
 
         <TabsContent value="database" className="space-y-6">
