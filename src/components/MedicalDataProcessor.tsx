@@ -1,14 +1,15 @@
 import React, { useState, useRef } from 'react';
-import { Upload, FileText, Database, Brain, CheckCircle, AlertCircle, Eye, Clock, MessageSquare, ArrowUp, ArrowDown } from 'lucide-react';
+import { Upload, FileText, Database, Brain, CheckCircle, AlertCircle, Eye, Clock, MessageSquare, ArrowUp, ArrowDown, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { usePrimaryPatient } from '@/hooks/usePrimaryPatient';
+import { usePatient } from '@/contexts/PatientContext';
 
 interface ProcessingLog {
   id: string;
@@ -38,7 +39,7 @@ interface ProcessingState {
 }
 
 const MedicalDataProcessor: React.FC = () => {
-  const { primaryPatient } = usePrimaryPatient();
+  const { primaryPatient, loading: patientLoading } = usePatient();
   const [file, setFile] = useState<File | null>(null);
   const [textInput, setTextInput] = useState('');
   const [processing, setProcessing] = useState<ProcessingState>({
@@ -872,6 +873,10 @@ const MedicalDataProcessor: React.FC = () => {
     );
   };
 
+  // Get patient info for display
+  const effectivePatientId = primaryPatient?.id;
+  const effectivePatientName = primaryPatient ? `${primaryPatient.first_name} ${primaryPatient.last_name}` : 'No Patient Selected';
+
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-6">
       <div className="text-center space-y-2">
@@ -880,6 +885,29 @@ const MedicalDataProcessor: React.FC = () => {
           Upload medical documents or enter text to extract and store health data in structured database tables
         </p>
       </div>
+
+      {/* Patient Information Display */}
+      {effectivePatientId ? (
+        <Alert className="border-primary/20 bg-primary/5">
+          <User className="h-4 w-4" />
+          <AlertDescription className="space-y-2">
+            <div className="flex items-center gap-6 flex-wrap">
+              <span><strong>Current Patient:</strong> {effectivePatientName}</span>
+              <span><strong>Patient ID:</strong> <code className="bg-primary/10 text-primary px-2 py-1 rounded text-sm font-mono">{effectivePatientId}</code></span>
+            </div>
+            <div className="text-sm text-muted-foreground">
+              All processed medical data will be linked to this patient ID in the database
+            </div>
+          </AlertDescription>
+        </Alert>
+      ) : (
+        <Alert className="border-yellow-200 bg-yellow-50">
+          <AlertCircle className="h-4 w-4 text-yellow-600" />
+          <AlertDescription>
+            <strong>No Patient Selected:</strong> Please select a patient before processing medical data.
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Input Section */}
       <Card>
@@ -933,24 +961,37 @@ const MedicalDataProcessor: React.FC = () => {
             />
           </div>
 
-          <Button
-            onClick={() => processDocument()}
-            disabled={processing.isProcessing || (!file && !textInput.trim())}
-            className="w-full"
-            size="lg"
-          >
-            {processing.isProcessing ? (
-              <>
-                <Clock className="h-4 w-4 mr-2 animate-spin" />
-                Processing...
-              </>
-            ) : (
-              <>
-                <Brain className="h-4 w-4 mr-2" />
-                Process Medical Data
-              </>
+          <div className="space-y-3">
+            <Button
+              onClick={() => processDocument()}
+              disabled={processing.isProcessing || (!file && !textInput.trim()) || !effectivePatientId}
+              className="w-full"
+              size="lg"
+            >
+              {processing.isProcessing ? (
+                <>
+                  <Clock className="h-4 w-4 mr-2 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <Brain className="h-4 w-4 mr-2" />
+                  Process Medical Data
+                </>
+              )}
+            </Button>
+            
+            {/* Patient ID Confirmation */}
+            {effectivePatientId && (
+              <div className="text-xs text-muted-foreground border rounded-md p-2 bg-muted/50">
+                <div className="flex items-center gap-2">
+                  <Database className="h-3 w-3" />
+                  <span>Target Patient ID: <code className="font-mono bg-background px-1 rounded">{effectivePatientId}</code></span>
+                </div>
+                <div className="mt-1">All extracted data will be linked to this patient</div>
+              </div>
             )}
-          </Button>
+          </div>
         </CardContent>
       </Card>
 
