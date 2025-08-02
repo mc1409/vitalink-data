@@ -22,6 +22,7 @@ import {
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { usePrimaryPatient } from '@/hooks/usePrimaryPatient';
+import TestProcessor from './TestProcessor';
 
 interface ComprehensiveMedicalProcessorProps {
   patientId?: string;
@@ -223,7 +224,7 @@ const ComprehensiveMedicalProcessor: React.FC<ComprehensiveMedicalProcessorProps
             const data = labData as any;
             
             // Validate required fields
-            if (!data.result_name) {
+            if (!data.test_name) {
               addLog('Database Save', 'warning', `Skipping ${key} - missing test name`);
               continue;
             }
@@ -231,12 +232,12 @@ const ComprehensiveMedicalProcessor: React.FC<ComprehensiveMedicalProcessorProps
             // Prepare the database insert payload
             const insertPayload = {
               patient_id: effectivePatientId,
-              test_name: data.result_name,
+              test_name: data.test_name,
               test_category: 'lab_work',
               test_type: 'blood_chemistry',
               numeric_value: data.numeric_value,
-              result_value: data.numeric_value?.toString() || data.result_value,
-              unit: data.unit || data.units,
+              result_value: data.result_value || data.numeric_value?.toString(),
+              unit: data.unit,
               reference_range_min: data.reference_range_min,
               reference_range_max: data.reference_range_max,
               measurement_time: new Date().toISOString(),
@@ -246,7 +247,7 @@ const ComprehensiveMedicalProcessor: React.FC<ComprehensiveMedicalProcessorProps
             // Check for duplicate first
             console.log('🔍 CHECKING FOR DUPLICATES...', {
               table: 'clinical_diagnostic_lab_tests',
-              test_name: data.result_name,
+              test_name: data.test_name,
               patient_id: effectivePatientId,
               timeRange: new Date(Date.now() - 60000).toISOString() // Last minute
             });
@@ -254,7 +255,7 @@ const ComprehensiveMedicalProcessor: React.FC<ComprehensiveMedicalProcessorProps
             const { data: existingRecords, error: duplicateCheckError } = await supabase
               .from('clinical_diagnostic_lab_tests')
               .select('*')
-              .eq('test_name', data.result_name)
+              .eq('test_name', data.test_name)
               .eq('patient_id', effectivePatientId)
               .gte('created_at', new Date(Date.now() - 60000).toISOString()) // Last minute
               .limit(1);
@@ -268,12 +269,12 @@ const ComprehensiveMedicalProcessor: React.FC<ComprehensiveMedicalProcessorProps
 
             if (duplicateCheckError) {
               console.error('❌ DUPLICATE CHECK ERROR:', duplicateCheckError);
-              addLog('Database Save', 'error', `Duplicate check failed for ${data.result_name}: ${duplicateCheckError.message}`);
+              addLog('Database Save', 'error', `Duplicate check failed for ${data.test_name}: ${duplicateCheckError.message}`);
               continue;
             }
 
             if (existingRecords && existingRecords.length > 0) {
-              addLog('Database Save', 'warning', `⚠️ Skipping duplicate record: ${data.result_name} (found ${existingRecords.length} existing records)`);
+              addLog('Database Save', 'warning', `⚠️ Skipping duplicate record: ${data.test_name} (found ${existingRecords.length} existing records)`);
               console.log('⚠️ SKIPPING DUPLICATE:', existingRecords[0]);
               continue;
             }
@@ -283,10 +284,10 @@ const ComprehensiveMedicalProcessor: React.FC<ComprehensiveMedicalProcessorProps
               table: 'clinical_diagnostic_lab_tests',
               operation: 'INSERT',
               payload: insertPayload,
-              sqlEquivalent: `INSERT INTO clinical_diagnostic_lab_tests (patient_id, test_name, test_category, test_type, numeric_value, result_value, unit, reference_range_min, reference_range_max, measurement_time, data_source) VALUES ('${effectivePatientId}', '${data.result_name}', 'lab_work', 'blood_chemistry', ${data.numeric_value}, '${data.numeric_value?.toString() || data.result_value}', '${data.units}', ${data.reference_range_min}, ${data.reference_range_max}, '${new Date().toISOString()}', 'document_upload')`
+              sqlEquivalent: `INSERT INTO clinical_diagnostic_lab_tests (patient_id, test_name, test_category, test_type, numeric_value, result_value, unit, reference_range_min, reference_range_max, measurement_time, data_source) VALUES ('${effectivePatientId}', '${data.test_name}', 'lab_work', 'blood_chemistry', ${data.numeric_value}, '${data.result_value || data.numeric_value?.toString()}', '${data.unit}', ${data.reference_range_min}, ${data.reference_range_max}, '${new Date().toISOString()}', 'document_upload')`
             });
             
-            addLog('Database Save', 'info', `📊 Executing INSERT into clinical_diagnostic_lab_tests for ${data.result_name}`);
+            addLog('Database Save', 'info', `📊 Executing INSERT into clinical_diagnostic_lab_tests for ${data.test_name}`);
 
             const { data: insertedData, error: saveError } = await supabase
               .from('clinical_diagnostic_lab_tests')
@@ -302,11 +303,11 @@ const ComprehensiveMedicalProcessor: React.FC<ComprehensiveMedicalProcessorProps
             
             if (!saveError && insertedData && insertedData.length > 0) {
               savedCount++;
-              addLog('Database Save', 'success', `✅ Saved lab result: ${data.result_name} = ${data.numeric_value || data.result_value} ${data.units || ''}`);
+              addLog('Database Save', 'success', `✅ Saved lab result: ${data.test_name} = ${data.numeric_value || data.result_value} ${data.unit || ''}`);
               console.log('✅ SUCCESSFULLY INSERTED:', insertedData[0]);
             } else {
               const errorMsg = saveError?.message || 'Unknown error - no data returned';
-              addLog('Database Save', 'error', `❌ Failed to save ${data.result_name}: ${errorMsg}`);
+              addLog('Database Save', 'error', `❌ Failed to save ${data.test_name}: ${errorMsg}`);
               console.error('❌ INSERT FAILED:', {
                 error: saveError,
                 payload: insertPayload,
@@ -424,6 +425,7 @@ const ComprehensiveMedicalProcessor: React.FC<ComprehensiveMedicalProcessorProps
 
   return (
     <div className="space-y-6">
+      <TestProcessor />
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">

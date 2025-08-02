@@ -52,10 +52,10 @@ CRITICAL RULE: You can ONLY extract data for columns that exist in the schema. I
 DATABASE SCHEMA - EXTRACT ONLY THESE EXACT COLUMNS:
 
 LAB_RESULTS (Primary biomarker data) - maps to clinical_diagnostic_lab_tests table:
-- result_name (text) - MUST match medical test names like "Hemoglobin", "Glucose", "Cholesterol", "TSH", etc.
+- test_name (text) - REQUIRED: Medical test names like "Hemoglobin A1c", "Glucose", "Cholesterol", "TSH", etc.
 - numeric_value (number) - The numerical result value  
-- unit (text) - Units exactly as written (g/dL, mg/dL, U/L, etc.) [NOTE: singular "unit", not "units"]
-- abnormal_flag (text) - ONLY: "normal", "high", "low", "critical_high", "critical_low"
+- unit (text) - Units exactly as written (g/dL, mg/dL, U/L, %, etc.)
+- result_value (text) - Text representation of the result (can be same as numeric_value)
 - reference_range_min (number) - Lower bound of normal range
 - reference_range_max (number) - Upper bound of normal range
 
@@ -129,16 +129,18 @@ REQUIRED RESPONSE FORMAT:
   "confidence": 0.95,
   "extractedFields": {
     "LAB_RESULTS_1": {
-      "result_name": "Hemoglobin",
-      "numeric_value": 14.5,
-      "unit": "g/dL",
-      "abnormal_flag": "normal"
+      "test_name": "Hemoglobin A1c",
+      "numeric_value": 6.1,
+      "unit": "%",
+      "result_value": "6.1",
+      "reference_range_min": 5.7,
+      "reference_range_max": 6.4
     },
     "LAB_RESULTS_2": {
-      "result_name": "Glucose",
+      "test_name": "Glucose",
       "numeric_value": 95,
       "unit": "mg/dL",
-      "abnormal_flag": "normal"
+      "result_value": "95"
     },
     "HEART_METRICS": {
       "measurement_timestamp": "2024-01-15T09:00:00Z",
