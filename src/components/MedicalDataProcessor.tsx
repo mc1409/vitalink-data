@@ -203,17 +203,20 @@ const MedicalDataProcessor: React.FC = () => {
       const extractedFields = data.extractedFields || {};
       const documentType = data.documentType || 'unknown';
       const confidence = data.confidence || 0.0;
+      const sqlQueries = data.sqlQueries || [];
 
       addLog('AI Processing', 'success', `AI analysis completed: ${documentType} (${Math.round(confidence * 100)}% confidence)`, {
         documentType,
         confidence,
-        fieldsExtracted: Object.keys(extractedFields).length
+        fieldsExtracted: Object.keys(extractedFields).length,
+        sqlQueriesGenerated: sqlQueries.length
       });
 
       return {
         documentType,
         confidence,
-        extractedFields
+        extractedFields,
+        sqlQueries
       };
     } catch (error: any) {
       console.error('AI Processing error:', error);
@@ -271,6 +274,84 @@ const MedicalDataProcessor: React.FC = () => {
       console.error('Error checking duplicates:', error);
       return { hasDuplicates: false, duplicateDetails: [] };
     }
+  };
+  
+  const executeLLMSqlQueries = async (sqlQueries: string[]): Promise<any[]> => {
+    addLog('Database Save', 'processing', `Executing ${sqlQueries.length} LLM-generated SQL queries...`);
+    
+    const savedRecords: any[] = [];
+    const { primaryPatient } = usePatient();
+    const effectivePatientId = primaryPatient?.id;
+
+    if (!effectivePatientId) {
+      throw new Error('No patient ID available for database operations');
+    }
+
+    // Execute each LLM-generated SQL query
+    for (let i = 0; i < sqlQueries.length; i++) {
+      const sqlQuery = sqlQueries[i];
+      try {
+        addLog('Database Save', 'processing', `Executing SQL query ${i + 1}/${sqlQueries.length}`);
+
+        // Validate query is an INSERT statement for security
+        if (!sqlQuery.trim().toLowerCase().startsWith('insert')) {
+          addLog('Database Save', 'error', `Skipping non-INSERT query: ${sqlQuery.substring(0, 50)}...`);
+          continue;
+        }
+
+        // Extract table name for tracking
+        const tableMatch = sqlQuery.match(/INSERT INTO\s+(\w+)/i);
+        const tableName = tableMatch ? tableMatch[1] : 'unknown';
+
+        // For clinical_diagnostic_lab_tests, parse and use client methods for security
+        if (tableName === 'clinical_diagnostic_lab_tests') {
+          const valuesMatch = sqlQuery.match(/VALUES\s*\(\s*'([^']+)',\s*'([^']+)',\s*'([^']+)',\s*'([^']+)',\s*([\d.]+|NULL),\s*'([^']*)',\s*'([^']*)',\s*([\d.]+|NULL),\s*([\d.]+|NULL),\s*[^,]+,\s*'([^']+)'\s*\)/i);
+          
+          if (valuesMatch) {
+            const [, patientId, testName, testCategory, testType, numericValue, resultValue, unit, rangeMin, rangeMax, dataSource] = valuesMatch;
+            
+            const insertPayload = {
+              patient_id: effectivePatientId, // Always use our verified patient ID
+              test_name: testName,
+              test_category: testCategory,
+              test_type: testType,
+              numeric_value: numericValue === 'NULL' ? null : parseFloat(numericValue),
+              result_value: resultValue,
+              unit: unit || null,
+              reference_range_min: rangeMin === 'NULL' ? null : parseFloat(rangeMin),
+              reference_range_max: rangeMax === 'NULL' ? null : parseFloat(rangeMax),
+              measurement_time: new Date().toISOString(),
+              data_source: dataSource
+            };
+
+            const { data: insertResult, error: insertError } = await supabase
+              .from('clinical_diagnostic_lab_tests')
+              .insert(insertPayload)
+              .select()
+              .single();
+
+            if (insertError) {
+              addLog('Database Save', 'error', `Failed to insert ${testName}: ${insertError.message}`);
+              continue;
+            }
+
+            savedRecords.push({
+              table: tableName,
+              id: insertResult.id,
+              record: insertResult
+            });
+
+            addLog('Database Save', 'success', `Successfully saved ${testName} to ${tableName}`);
+          }
+        }
+      } catch (error: any) {
+        addLog('Database Save', 'error', `Error executing SQL query ${i + 1}: ${error.message}`);
+        console.error('SQL execution error:', error);
+      }
+    }
+
+    addLog('Database Save', 'success', `Completed SQL execution: ${savedRecords.length} records saved`);
+    return savedRecords;
   };
 
   const mapAndSaveToDatabase = async (extractedData: ExtractedData): Promise<any[]> => {
@@ -551,8 +632,8 @@ const MedicalDataProcessor: React.FC = () => {
         addLog('Duplicate Check', 'warning', `Found ${duplicateCheck.duplicateDetails.length} potential duplicates`, duplicateCheck.duplicateDetails);
       }
 
-      // Step 3: Save to database
-      const savedRecords = await mapAndSaveToDatabase(aiResult.extractedFields);
+      // Step 3: Execute LLM-generated SQL queries instead of manual mapping
+      const savedRecords = await executeLLMSqlQueries(aiResult.sqlQueries || []);
       
       setProcessing(prev => ({ ...prev, 
         status: 'completed',
