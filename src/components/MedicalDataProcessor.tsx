@@ -183,12 +183,13 @@ const MedicalDataProcessor: React.FC = () => {
 
       console.log('Supabase response:', { data, error });
 
-      if (error) {
-        console.error('Supabase error details:', error);
+      // Check if we have data despite an error object (common with edge functions)
+      if (data && data.documentType) {
+        console.log('✅ Edge function succeeded with data:', data);
+      } else if (error) {
+        console.error('❌ Supabase error details:', error);
         throw new Error(`AI processing failed: ${error.message || JSON.stringify(error)}`);
-      }
-
-      if (!data) {
+      } else if (!data) {
         throw new Error('No data returned from AI processing');
       }
 
