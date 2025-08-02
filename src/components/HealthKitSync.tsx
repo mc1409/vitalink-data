@@ -155,7 +155,7 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
       if (records.length === 0) return;
       try {
         const { error } = await supabase.from('biomarker_activity').upsert(records, {
-          onConflict: 'user_id,device_type,measurement_date',
+          onConflict: 'patient_id,device_type,measurement_date',
           ignoreDuplicates: false
         });
         if (error) {
@@ -177,7 +177,7 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
       if (records.length === 0) return;
       try {
         const { error } = await supabase.from('biomarker_heart').upsert(records, {
-          onConflict: 'user_id,device_type,measurement_timestamp',
+          onConflict: 'patient_id,device_type,measurement_time',
           ignoreDuplicates: false
         });
         if (error) {
@@ -199,7 +199,7 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
       if (records.length === 0) return;
       try {
         const { error } = await supabase.from('biomarker_sleep').upsert(records, {
-          onConflict: 'user_id,device_type,sleep_date',
+          onConflict: 'patient_id,device_type,sleep_date',
           ignoreDuplicates: false
         });
         if (error) {
@@ -229,9 +229,9 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
         // Activity data
         if (validatedData.steps > 0 || validatedData.activeCalories > 0) {
           activityRecords.push({
-            user_id: userId,
+            patient_id: userId,
             measurement_date: validatedData.date,
-            measurement_timestamp: new Date(`${validatedData.date}T12:00:00Z`).toISOString(),
+            measurement_time: new Date(`${validatedData.date}T12:00:00Z`).toISOString(),
             steps_count: validatedData.steps,
             distance_walked_meters: Math.round(validatedData.distance * 1000),
             active_calories: validatedData.activeCalories,
@@ -245,15 +245,14 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
         if (validatedData.heartRate > 30) {
           const variance = Math.random() * 10; // Add some variance for realistic data
           heartRecords.push({
-            user_id: userId,
-            measurement_timestamp: new Date(`${validatedData.date}T12:00:00Z`).toISOString(),
+            patient_id: userId,
+            measurement_time: new Date(`${validatedData.date}T12:00:00Z`).toISOString(),
             average_heart_rate: validatedData.heartRate,
             max_heart_rate: Math.min(220, validatedData.heartRate + variance + 10),
             min_heart_rate: Math.max(30, validatedData.heartRate - variance),
             resting_heart_rate: Math.max(30, Math.min(100, validatedData.heartRate - 5)),
             device_type: 'HealthKit',
             data_source: 'Apple HealthKit',
-            measurement_context: 'historical_sync',
             afib_detected: false,
             irregular_rhythm_detected: false
           });
@@ -263,10 +262,10 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
         if (validatedData.sleepHours > 0) {
           const totalMinutes = Math.round(validatedData.sleepHours * 60);
           sleepRecords.push({
-            user_id: userId,
+            patient_id: userId,
+            measurement_time: new Date().toISOString(),
             sleep_date: validatedData.date,
             total_sleep_time: totalMinutes,
-            deep_sleep_minutes: Math.round(totalMinutes * 0.25), // 25% deep sleep
             light_sleep_minutes: Math.round(totalMinutes * 0.55), // 55% light sleep
             rem_sleep_minutes: Math.round(totalMinutes * 0.20), // 20% REM sleep
             time_in_bed: totalMinutes + Math.round(Math.random() * 30), // Add some bed time

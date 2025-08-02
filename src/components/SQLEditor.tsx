@@ -49,20 +49,23 @@ LIMIT 50;`
     },
     {
       name: "All Biomarker Data Overview",
-      query: `SELECT 
+      query: `(SELECT 
   'Activity' as type, patient_id, measurement_time, 
   CONCAT(steps_count, ' steps, ', total_calories, ' cal') as summary
 FROM biomarker_activity
+ORDER BY measurement_time DESC LIMIT 50)
 UNION ALL
-SELECT 
+(SELECT 
   'Heart' as type, patient_id, measurement_time,
   CONCAT(resting_heart_rate, ' bpm rest, ', average_heart_rate, ' bpm avg') as summary
 FROM biomarker_heart
+ORDER BY measurement_time DESC LIMIT 50)
 UNION ALL
-SELECT 
+(SELECT 
   'Sleep' as type, patient_id, measurement_time,
   CONCAT(total_sleep_time, ' min sleep, ', sleep_score, ' score') as summary
 FROM biomarker_sleep
+ORDER BY measurement_time DESC LIMIT 50)
 ORDER BY measurement_time DESC 
 LIMIT 100;`
     },

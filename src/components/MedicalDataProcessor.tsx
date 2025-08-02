@@ -281,10 +281,10 @@ const MedicalDataProcessor: React.FC = () => {
 
     // Define EXACT database schema - only these columns are allowed
     const DATABASE_SCHEMA = {
-      lab_results: ['result_name', 'numeric_value', 'text_value', 'units', 'reference_range_min', 'reference_range_max', 'abnormal_flag', 'result_status', 'interpretation', 'reviewing_physician'],
-      heart_metrics: ['measurement_timestamp', 'device_type', 'resting_heart_rate', 'max_heart_rate', 'min_heart_rate', 'average_heart_rate', 'systolic_bp', 'diastolic_bp', 'hrv_score', 'hrv_rmssd', 'hrv_sdnn', 'vo2_max', 'workout_heart_rate', 'recovery_heart_rate', 'walking_heart_rate'],
-      activity_metrics: ['measurement_date', 'measurement_timestamp', 'device_type', 'steps_count', 'total_calories', 'active_calories', 'basal_calories', 'exercise_minutes', 'moderate_activity_minutes', 'vigorous_activity_minutes', 'distance_walked_meters', 'distance_ran_meters', 'distance_cycled_meters', 'flights_climbed'],
-      sleep_metrics: ['sleep_date', 'device_type', 'total_sleep_time', 'deep_sleep_minutes', 'rem_sleep_minutes', 'light_sleep_minutes', 'awake_minutes', 'sleep_efficiency', 'sleep_latency', 'sleep_score', 'sleep_disturbances', 'restfulness_score'],
+      clinical_diagnostic_lab_tests: ['test_name', 'test_category', 'test_type', 'numeric_value', 'result_value', 'measurement_time', 'data_source', 'patient_id', 'unit', 'reference_range_min', 'reference_range_max', 'sample_type', 'collection_date'],
+      biomarker_heart: ['measurement_time', 'device_type', 'data_source', 'resting_heart_rate', 'max_heart_rate', 'min_heart_rate', 'average_heart_rate', 'systolic_bp', 'diastolic_bp', 'hrv_score', 'hrv_rmssd', 'hrv_sdnn', 'vo2_max', 'workout_heart_rate', 'recovery_heart_rate', 'walking_heart_rate', 'patient_id'],
+      biomarker_activity: ['measurement_date', 'measurement_time', 'device_type', 'data_source', 'steps_count', 'total_calories', 'active_calories', 'basal_calories', 'exercise_minutes', 'moderate_activity_minutes', 'vigorous_activity_minutes', 'distance_walked_meters', 'distance_ran_meters', 'distance_cycled_meters', 'flights_climbed', 'patient_id'],
+      biomarker_sleep: ['sleep_date', 'measurement_time', 'device_type', 'data_source', 'total_sleep_time', 'deep_sleep_minutes', 'rem_sleep_minutes', 'light_sleep_minutes', 'awake_minutes', 'sleep_efficiency', 'sleep_latency', 'sleep_score', 'sleep_disturbances', 'restfulness_score', 'patient_id'],
       nutrition_metrics: ['measurement_date', 'total_calories', 'protein_grams', 'carbohydrates_grams', 'fat_grams', 'fiber_grams', 'sugar_grams', 'sodium_mg', 'calcium_mg', 'iron_mg', 'vitamin_d_iu', 'vitamin_b12_mcg', 'vitamin_c_mg'],
       microbiome_metrics: ['test_date', 'test_provider', 'alpha_diversity', 'beta_diversity', 'beneficial_bacteria_score', 'pathogenic_bacteria_score', 'butyrate_production', 'acetate_production', 'propionate_production', 'species_richness'],
       environmental_metrics: ['measurement_date', 'measurement_timestamp', 'device_type', 'air_quality_index', 'uv_exposure_minutes', 'weather_temperature', 'humidity_percentage', 'barometric_pressure', 'pm25_level', 'pm10_level'],
@@ -369,8 +369,8 @@ const MedicalDataProcessor: React.FC = () => {
         if (!data || typeof data !== 'object') continue;
 
         // Handle LAB_RESULTS (multiple entries possible)
-        if (tableName.startsWith('LAB_RESULTS') && DATABASE_SCHEMA.lab_results) {
-          const validData = validateAndFilterData(data, DATABASE_SCHEMA.lab_results);
+        if (tableName.startsWith('LAB_RESULTS') && DATABASE_SCHEMA.clinical_diagnostic_lab_tests) {
+          const validData = validateAndFilterData(data, DATABASE_SCHEMA.clinical_diagnostic_lab_tests);
           
           if (!validData.result_name) {
             addLog('Database Mapping', 'warning', `Skipping ${tableName} - missing required result_name`);
@@ -399,9 +399,9 @@ const MedicalDataProcessor: React.FC = () => {
           if (error) {
             addLog('Database Mapping', 'error', `Lab result insertion failed: ${error.message}`, { error, query: insertQuery });
           } else {
-            savedRecords.push({ table: 'lab_results', data: result, confidence: 0.95 });
-            addLog('Database Mapping', 'success', `✅ Lab result saved: ${validData.result_name} = ${validData.numeric_value || validData.text_value} ${validData.units || ''}`, { 
-              table: 'lab_results',
+            savedRecords.push({ table: 'clinical_diagnostic_lab_tests', data: result, confidence: 0.95 });
+            addLog('Database Mapping', 'success', `✅ Lab result saved: ${validData.test_name} = ${validData.numeric_value || validData.result_value}`, { 
+              table: 'clinical_diagnostic_lab_tests',
               id: result.id,
               record: result
             });
@@ -409,11 +409,11 @@ const MedicalDataProcessor: React.FC = () => {
         }
 
         // Handle HEART_METRICS
-        else if (tableName === 'HEART_METRICS' && DATABASE_SCHEMA.heart_metrics) {
-          const validData = validateAndFilterData(data, DATABASE_SCHEMA.heart_metrics);
+        else if (tableName === 'HEART_METRICS' && DATABASE_SCHEMA.biomarker_heart) {
+          const validData = validateAndFilterData(data, DATABASE_SCHEMA.biomarker_heart);
           
-          if (!validData.measurement_timestamp) {
-            validData.measurement_timestamp = new Date().toISOString();
+          if (!validData.measurement_time) {
+            validData.measurement_time = new Date().toISOString();
           }
           if (!validData.device_type) {
             validData.device_type = 'manual';
@@ -421,13 +421,13 @@ const MedicalDataProcessor: React.FC = () => {
 
           const insertQuery = {
             ...validData,
-            user_id: userId,
+            patient_id: userId,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
           };
 
-          addLog('Database Mapping', 'info', `Building query for heart_metrics:`, { 
-            table: 'heart_metrics',
+          addLog('Database Mapping', 'info', `Building query for biomarker_heart:`, { 
+            table: 'biomarker_heart',
             query: insertQuery
           });
 
@@ -450,14 +450,14 @@ const MedicalDataProcessor: React.FC = () => {
         }
 
         // Handle ACTIVITY_METRICS
-        else if (tableName === 'ACTIVITY_METRICS' && DATABASE_SCHEMA.activity_metrics) {
-          const validData = validateAndFilterData(data, DATABASE_SCHEMA.activity_metrics);
+        else if (tableName === 'ACTIVITY_METRICS' && DATABASE_SCHEMA.biomarker_activity) {
+          const validData = validateAndFilterData(data, DATABASE_SCHEMA.biomarker_activity);
           
           if (!validData.measurement_date) {
             validData.measurement_date = new Date().toISOString().split('T')[0];
           }
-          if (!validData.measurement_timestamp) {
-            validData.measurement_timestamp = new Date().toISOString();
+          if (!validData.measurement_time) {
+            validData.measurement_time = new Date().toISOString();
           }
           if (!validData.device_type) {
             validData.device_type = 'manual';
@@ -465,7 +465,7 @@ const MedicalDataProcessor: React.FC = () => {
 
           const insertQuery = {
             ...validData,
-            user_id: userId
+            patient_id: userId
           };
 
           const { data: result, error } = await supabase

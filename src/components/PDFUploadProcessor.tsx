@@ -346,26 +346,27 @@ const PDFUploadProcessor: React.FC = () => {
           // Map AI field names to database table names and fields
           const tableMapping: { [key: string]: { dbTable: string, mapFields: (data: any) => any } } = {
             'LAB_RESULTS': {
-              dbTable: 'lab_results',
+              dbTable: 'clinical_diagnostic_lab_tests',
               mapFields: (data: any) => ({
-                lab_test_id: null, // Will need to create lab_test first
-                result_name: data.result_name,
+                patient_id: patientId,
+                test_name: data.result_name || data.test_name || 'Lab Test',
+                test_category: 'Laboratory',
+                test_type: 'blood_test',
+                measurement_time: new Date().toISOString(),
+                data_source: 'document_upload',
                 numeric_value: data.numeric_value,
-                text_value: data.text_value,
-                units: data.units,
-                reference_range_min: data.reference_range_min,
-                reference_range_max: data.reference_range_max,
-                abnormal_flag: data.abnormal_flag,
+                result_value: data.text_value || data.result_value,
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString()
               })
             },
             'HEART_METRICS': {
-              dbTable: 'heart_metrics',
+              dbTable: 'biomarker_heart',
               mapFields: (data: any) => ({
-                user_id: user.id,
-                measurement_timestamp: data.measurement_timestamp ? new Date(data.measurement_timestamp).toISOString() : new Date().toISOString(),
+                patient_id: patientId,
+                measurement_time: data.measurement_timestamp ? new Date(data.measurement_timestamp).toISOString() : new Date().toISOString(),
                 device_type: 'manual_entry',
+                data_source: 'document_upload',
                 resting_heart_rate: data.resting_heart_rate,
                 max_heart_rate: data.max_heart_rate,
                 hrv_score: data.hrv_score,
@@ -374,11 +375,13 @@ const PDFUploadProcessor: React.FC = () => {
               })
             },
             'SLEEP_METRICS': {
-              dbTable: 'sleep_metrics',
+              dbTable: 'biomarker_sleep',
               mapFields: (data: any) => ({
-                user_id: user.id,
+                patient_id: patientId,
                 sleep_date: data.sleep_date || new Date().toISOString().split('T')[0],
+                measurement_time: new Date().toISOString(),
                 device_type: 'manual_entry',
+                data_source: 'document_upload',
                 total_sleep_time: data.total_sleep_time,
                 deep_sleep_minutes: data.deep_sleep_minutes,
                 sleep_score: data.sleep_score,
@@ -387,12 +390,13 @@ const PDFUploadProcessor: React.FC = () => {
               })
             },
             'ACTIVITY_METRICS': {
-              dbTable: 'activity_metrics',
+              dbTable: 'biomarker_activity',
               mapFields: (data: any) => ({
-                user_id: user.id,
+                patient_id: patientId,
                 measurement_date: data.measurement_date || new Date().toISOString().split('T')[0],
-                measurement_timestamp: new Date().toISOString(),
+                measurement_time: new Date().toISOString(),
                 device_type: 'manual_entry',
+                data_source: 'document_upload',
                 steps_count: data.steps_count,
                 total_calories: data.total_calories,
                 exercise_minutes: data.exercise_minutes,
@@ -417,7 +421,7 @@ const PDFUploadProcessor: React.FC = () => {
             const mappedRecord = mapFields(tableData);
             
             // Special handling for lab results - need to create lab_test first
-            if (dbTable === 'lab_results' && patientId) {
+            if (dbTable === 'clinical_diagnostic_lab_tests' && patientId) {
               console.log('\n🧪 CREATING LAB TEST FIRST:');
               const labTestRecord = {
                 patient_id: patientId,
