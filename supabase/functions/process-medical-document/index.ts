@@ -45,85 +45,97 @@ serve(async (req) => {
       throw new Error('Azure OpenAI configuration missing');
     }
 
-    // Enhanced medical data extraction prompt with SQL generation
-    const systemPrompt = `You are a medical data extraction specialist and SQL query generator. Your job is to:
-1. Extract structured data from medical documents according to the database schema
-2. Generate complete SQL INSERT statements for the extracted data using the provided patient ID
+    const databaseSchema = `
+Database Schema for Medical Data Extraction:
 
-DATABASE SCHEMA FOR SQL GENERATION:
+clinical_diagnostic_lab_tests:
+- patient_id (uuid, required)
+- test_name (text, required) 
+- test_category (text, required)
+- test_type (text, required)
+- numeric_value (numeric, optional)
+- result_value (text, optional)
+- unit (text, optional)
+- reference_range_min (numeric, optional)
+- reference_range_max (numeric, optional)
+- measurement_time (timestamp, required)
+- data_source (text, required)
 
-clinical_diagnostic_lab_tests table (for LAB_RESULTS):
-- id (uuid, auto-generated)
-- patient_id (uuid, use the provided patient_id: ${patient_id})
-- test_name (text, required)
-- test_category (text, default: 'lab_work') 
-- test_type (text, default: 'blood_chemistry')
-- numeric_value (numeric, nullable)
-- result_value (text, nullable)
-- unit (text, nullable)
-- reference_range_min (numeric, nullable)
-- reference_range_max (numeric, nullable)
-- measurement_time (timestamp, use current timestamp)
-- data_source (text, default: 'document_upload')
-- created_at (timestamp, auto-generated)
-- updated_at (timestamp, auto-generated)
+biomarker_heart:
+- patient_id (uuid, required)
+- measurement_time (timestamp, required)
+- device_type (text, required)
+- data_source (text, required)
+- resting_heart_rate (integer, optional)
+- max_heart_rate (integer, optional)
+- systolic_bp (integer, optional)
+- diastolic_bp (integer, optional)
+- hrv_score (integer, optional)
 
-biomarker_heart table (for HEART_METRICS):
-- id (uuid, auto-generated)
-- patient_id (uuid, use the provided patient_id: ${patient_id})
-- measurement_time (timestamp, use current timestamp)
-- device_type (text, default: 'manual')
-- data_source (text, default: 'document_upload')
-- resting_heart_rate (integer, nullable)
-- max_heart_rate (integer, nullable)
-- systolic_bp (integer, nullable) 
-- diastolic_bp (integer, nullable)
-- hrv_score (integer, nullable)
-- created_at (timestamp, auto-generated)
-- updated_at (timestamp, auto-generated)
+biomarker_activity:
+- patient_id (uuid, required)
+- measurement_date (date, required)
+- measurement_time (timestamp, required)
+- device_type (text, required)
+- data_source (text, required)
+- steps_count (integer, optional)
+- total_calories (integer, optional)
+- distance_walked_meters (numeric, optional)
 
-REQUIRED RESPONSE FORMAT:
+biomarker_sleep:
+- patient_id (uuid, required)
+- sleep_date (date, required)
+- measurement_time (timestamp, required)
+- device_type (text, required)
+- data_source (text, required)
+- total_sleep_time (integer, optional)
+- sleep_efficiency (numeric, optional)
+`;
+
+    const systemPrompt = `You are a medical document processor that extracts structured data from medical documents and maps it to database schema.
+
+Database Schema:
+${databaseSchema}
+
+Your task is to:
+1. Analyze the provided medical document text
+2. Extract relevant medical data and map it to the appropriate database tables
+3. Return structured JSON data that matches the database schema exactly
+4. Provide confidence scores and validation flags
+
+IMPORTANT EXTRACTION RULES:
+- Only extract data that is explicitly mentioned in the document
+- Do not infer or assume values that are not clearly stated
+- For lab test results, ensure you extract the test name, value, unit, and reference ranges if available
+- For dates, convert them to ISO format (YYYY-MM-DD)
+- For timestamps, use ISO format with timezone (YYYY-MM-DDTHH:MM:SSZ)
+- Map extracted data to the correct database table based on the type of information
+- Ensure all extracted values match the expected data types for each field
+- Use the provided patient_id in all extracted records
+- Include confidence scores for each extracted field (0-100)
+
+Response format:
 {
-  "documentType": "lab_report|biomarker_report|health_metrics|other",
-  "confidence": 0.95,
+  "documentType": "string (e.g., 'lab_results', 'biomarker_report', 'heart_monitor')",
+  "confidence": number (0-100),
   "extractedFields": {
-    "LAB_RESULTS_1": {
-      "test_name": "Hemoglobin A1c",
-      "numeric_value": 6.1,
-      "unit": "%",
-      "result_value": "6.1",
-      "reference_range_min": 5.7,
-      "reference_range_max": 6.4
-    }
-  },
-  "sqlQueries": [
-    "INSERT INTO clinical_diagnostic_lab_tests (patient_id, test_name, test_category, test_type, numeric_value, result_value, unit, reference_range_min, reference_range_max, measurement_time, data_source) VALUES ('${patient_id}', 'Hemoglobin A1c', 'lab_work', 'blood_chemistry', 6.1, '6.1', '%', 5.7, 6.4, '${new Date().toISOString()}', 'document_upload');"
-  ]
-}
-
-SQL GENERATION RULES:
-1. Generate complete INSERT statements for each extracted data point
-2. ALWAYS use the provided patient_id: '${patient_id}' for patient_id values (do NOT use placeholders)
-3. Use current timestamp in ISO format for timestamp values
-4. Include proper NULL handling for missing values
-5. Escape single quotes in text values by doubling them
-6. Only generate SQL for data you extract in extractedFields
-7. Each SQL statement must be complete and executable
-8. Use appropriate table based on data type (clinical_diagnostic_lab_tests for lab results, etc.)
-
-EXTRACTION RULES:
-1. Extract medical test results, vital signs, and biomarker data
-2. Map test names to standard terminology
-3. Include units, reference ranges, and numeric values
-4. Only include data you are >90% confident about
-5. Generate corresponding SQL INSERT for each extracted field using the actual patient_id: ${patient_id}
-6. Maintain data consistency between extractedFields and sqlQueries
-
-Be thorough and generate both structured data and corresponding SQL statements with the real patient ID.`;
+    "table_name": [
+      {
+        "patient_id": "uuid",
+        "field_name": "extracted_value",
+        "measurement_time": "timestamp",
+        "_confidence": number,
+        "_validation_flags": ["flag1", "flag2"],
+        ...
+      }
+    ]
+  }
+}`;
 
     const userPrompt = `Analyze this medical document and extract structured data according to the medical data extraction protocol:
 
 FILENAME: ${filename}
+PATIENT_ID: ${patient_id}
 DOCUMENT TEXT:
 ${documentText}
 
@@ -137,7 +149,7 @@ EXTRACTION REQUIREMENTS:
 7. Extract physician and facility information
 8. Preserve all timestamps and dates
 9. Flag uncertain extractions for manual review
-10. Provide recommendations based on findings
+10. Use the provided patient_id: ${patient_id} for ALL extracted records
 
 Return the complete structured JSON response with confidence scoring and uncertainty flags as specified in the format above.`;
 
@@ -262,10 +274,7 @@ Return the complete structured JSON response with confidence scoring and uncerta
     const result = {
       documentType: parsedResult.documentType || 'other',
       confidence: Math.min(1.0, Math.max(0.0, parsedResult.confidence || 0.5)),
-      extractedFields: parsedResult.extractedFields || {},
-      sqlQueries: Array.isArray(parsedResult.sqlQueries) 
-        ? parsedResult.sqlQueries.slice(0, 20)
-        : []
+      extractedFields: parsedResult.extractedFields || {}
     };
 
     console.log('🎯 FINAL PROCESSED RESULT:');
@@ -273,7 +282,6 @@ Return the complete structured JSON response with confidence scoring and uncerta
     console.log('📋 Document Type:', result.documentType);
     console.log('🎯 Confidence:', result.confidence);
     console.log('📊 Extracted Fields Count:', Object.keys(result.extractedFields).length);
-    console.log('🔍 SQL Queries Generated:', result.sqlQueries.length);
     console.log('📄 Full Result:', JSON.stringify(result, null, 2));
     console.log('⏰ PROCESSING COMPLETED:', new Date().toISOString());
 
@@ -288,8 +296,7 @@ Return the complete structured JSON response with confidence scoring and uncerta
       error: error.message,
       documentType: 'error',
       confidence: 0,
-      extractedFields: {},
-      sqlQueries: []
+      extractedFields: {}
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

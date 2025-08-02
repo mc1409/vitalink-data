@@ -215,8 +215,7 @@ const MedicalDataProcessor: React.FC = () => {
       return {
         documentType,
         confidence,
-        extractedFields,
-        sqlQueries
+        extractedFields
       };
     } catch (error: any) {
       console.error('AI Processing error:', error);
