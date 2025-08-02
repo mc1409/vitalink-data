@@ -1,7 +1,19 @@
 import { useState, useEffect } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { useToast } from '@/hooks/use-toast';
-import { CapacitorHealthkit } from '@perfood/capacitor-healthkit';
+
+// Conditional import for HealthKit to avoid build issues on web
+let CapacitorHealthkit: any = null;
+if (typeof window !== 'undefined' && Capacitor.isNativePlatform()) {
+  try {
+    // Dynamic import to avoid build issues
+    import('@perfood/capacitor-healthkit').then(module => {
+      CapacitorHealthkit = module.CapacitorHealthkit;
+    });
+  } catch (error) {
+    console.warn('HealthKit plugin not available');
+  }
+}
 
 interface HealthKitHook {
   isAvailable: boolean;
@@ -37,7 +49,7 @@ export const useHealthKit = (): HealthKitHook => {
   };
 
   const connect = async (): Promise<void> => {
-    if (!isAvailable) {
+    if (!isAvailable || !CapacitorHealthkit) {
       throw new Error('HealthKit is not available on this device');
     }
 
@@ -109,8 +121,8 @@ export const useHealthKit = (): HealthKitHook => {
   };
 
   const syncData = async (): Promise<any> => {
-    if (!isConnected) {
-      throw new Error('Not connected to HealthKit');
+    if (!isConnected || !CapacitorHealthkit) {
+      throw new Error('Not connected to HealthKit or HealthKit not available');
     }
 
     setIsLoading(true);
