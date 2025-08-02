@@ -40,7 +40,6 @@ const App = () => {
       </AuthProvider>
     </QueryClientProvider>
   );
-  );
 };
 
 export default App;

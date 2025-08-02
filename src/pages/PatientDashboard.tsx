@@ -3,10 +3,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import PatientSelector from '@/components/PatientSelector';
 import HealthKitSyncPatientCentric from '@/components/HealthKitSyncPatientCentric';
-import PDFUploadProcessor from '@/components/PDFUploadProcessor';
+import PatientBiomarkerDashboard from '@/components/PatientBiomarkerDashboard';
 import DatabaseDashboard from '@/components/DatabaseDashboard';
 import SimpleTableViewer from '@/components/SimpleTableViewer';
-import { Activity, FileText, Database, Heart } from 'lucide-react';
+import { Activity, FileText, Database, Heart, BarChart3 } from 'lucide-react';
 
 const PatientDashboard: React.FC = () => {
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
@@ -28,10 +28,14 @@ const PatientDashboard: React.FC = () => {
 
       {/* Main Content Tabs */}
       <Tabs defaultValue="overview" className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="overview" className="gap-2">
             <Heart className="h-4 w-4" />
             Overview
+          </TabsTrigger>
+          <TabsTrigger value="biomarkers" className="gap-2">
+            <BarChart3 className="h-4 w-4" />
+            Biomarkers
           </TabsTrigger>
           <TabsTrigger value="sync" className="gap-2">
             <Activity className="h-4 w-4" />
@@ -110,6 +114,19 @@ const PatientDashboard: React.FC = () => {
           )}
         </TabsContent>
 
+        <TabsContent value="biomarkers" className="space-y-6">
+          {selectedPatientId ? (
+            <PatientBiomarkerDashboard patientId={selectedPatientId} />
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle>Biomarker Analytics</CardTitle>
+                <CardDescription>Please select a patient to view biomarker trends and analytics</CardDescription>
+              </CardHeader>
+            </Card>
+          )}
+        </TabsContent>
+
         <TabsContent value="sync" className="space-y-6">
           {selectedPatientId ? (
             <HealthKitSyncPatientCentric patientId={selectedPatientId} />
@@ -124,16 +141,15 @@ const PatientDashboard: React.FC = () => {
         </TabsContent>
 
         <TabsContent value="upload" className="space-y-6">
-          {selectedPatientId ? (
-            <div>PDF Upload component will be updated for patient-centric design</div>
-          ) : (
-            <Card>
-              <CardHeader>
-                <CardTitle>Document Upload</CardTitle>
-                <CardDescription>Please select a patient to upload medical documents</CardDescription>
-              </CardHeader>
-            </Card>
-          )}
+          <Card>
+            <CardHeader>
+              <CardTitle>Document Upload</CardTitle>
+              <CardDescription>Document upload will be updated for patient-centric workflow</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground">Feature coming soon with patient-specific document processing.</p>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="database" className="space-y-6">

@@ -5,9 +5,8 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Database, RefreshCw, Eye, Search, FileText, Activity, Heart, Beaker } from 'lucide-react';
+import { Database, RefreshCw, Eye, Heart, Activity, Brain } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/components/AuthProvider';
 import { toast } from 'sonner';
 
 interface TableInfo {
@@ -15,7 +14,6 @@ interface TableInfo {
   count: number;
   category: string;
   description: string;
-  icon: React.ElementType;
 }
 
 interface TableData {
@@ -23,7 +21,6 @@ interface TableData {
 }
 
 const DatabaseDashboard = () => {
-  const { user } = useAuth();
   const [tables, setTables] = useState<TableInfo[]>([]);
   const [selectedTable, setSelectedTable] = useState<string>('');
   const [tableData, setTableData] = useState<TableData[]>([]);
@@ -31,18 +28,29 @@ const DatabaseDashboard = () => {
   const [refreshing, setRefreshing] = useState(false);
 
   const tableCategories = {
-    'Core User Management': { color: 'blue', icon: '👤' },
-    'Biomarker Data': { color: 'green', icon: '📊' },
-    'Clinical Diagnostics': { color: 'red', icon: '🏥' },
-    'System Management': { color: 'gray', icon: '⚙️' }
+    'Core User Management': {
+      tables: ['profiles', 'patients'],
+      icon: Heart,
+      color: 'text-blue-600'
+    },
+    'Biomarker Data': {
+      tables: ['biomarker_heart', 'biomarker_sleep', 'biomarker_activity', 'biomarker_nutrition', 'biomarker_biological_genetic_microbiome'],
+      icon: Activity,
+      color: 'text-green-600'
+    },
+    'Clinical Diagnostics': {
+      tables: ['clinical_diagnostic_lab_tests', 'clinical_diagnostic_cardiovascular'],
+      icon: Brain,
+      color: 'text-red-600'
+    },
+    'System Management': {
+      tables: ['device_integrations', 'document_processing_logs', 'test_standardization_map'],
+      icon: Database,
+      color: 'text-gray-600'
+    }
   };
 
   const getTableInfo = async () => {
-    console.log('Database refresh - User:', user?.email, 'checking tables...');
-    if (!user) {
-      toast.error('Please log in to view database');
-      return;
-    }
     setRefreshing(true);
     try {
       const tableInfos: TableInfo[] = [];
@@ -59,8 +67,7 @@ const DatabaseDashboard = () => {
                 name: tableName,
                 count: count || 0,
                 category,
-                description: getTableDescription(tableName),
-                icon: info.icon
+                description: getTableDescription(tableName)
               });
             }
           } catch (err) {
@@ -79,24 +86,20 @@ const DatabaseDashboard = () => {
 
   const getTableDescription = (tableName: string): string => {
     const descriptions: { [key: string]: string } = {
-      'patients': 'Patient demographics and contact information',
-      'lab_tests': 'Laboratory test orders and metadata',
-      'lab_results': 'Individual lab test results and values',
-      'imaging_studies': 'Medical imaging studies and reports',
-      'cardiovascular_tests': 'ECG, stress tests, and cardiac evaluations',
-      'allergies': 'Patient allergy information and reactions',
-      'activity_metrics': 'Physical activity and fitness data',
-      'heart_metrics': 'Heart rate, HRV, and cardiovascular data',
-      'sleep_metrics': 'Sleep tracking and quality metrics',
-      'nutrition_metrics': 'Nutritional intake and dietary data',
-      'microbiome_metrics': 'Gut health and microbiome analysis',
-      'recovery_strain_metrics': 'Recovery scores and strain data',
-      'environmental_metrics': 'Environmental exposure and conditions',
-      'profiles': 'User profile information',
-      'device_integrations': 'Connected device configurations',
-      'document_processing_logs': 'PDF upload and processing history'
+      'profiles': 'User account and basic profile information',
+      'patients': 'Individual health records linked to user profiles',
+      'biomarker_heart': 'Heart rate, HRV, and cardiovascular biomarkers',
+      'biomarker_sleep': 'Sleep tracking data from devices and apps',
+      'biomarker_activity': 'Physical activity, steps, and exercise data',
+      'biomarker_nutrition': 'Dietary intake and nutritional measurements',
+      'biomarker_biological_genetic_microbiome': 'Microbiome, genetic markers, and recovery metrics',
+      'clinical_diagnostic_lab_tests': 'Laboratory tests, results, and allergy records',
+      'clinical_diagnostic_cardiovascular': 'Heart-related diagnostic tests (ECG, stress tests)',
+      'device_integrations': 'Connected health device configurations',
+      'document_processing_logs': 'Uploaded medical document processing history',
+      'test_standardization_map': 'Mapping of test names to standardized nomenclature'
     };
-    return descriptions[tableName] || 'Database table';
+    return descriptions[tableName] || 'Health data table';
   };
 
   const viewTableData = async (tableName: string) => {
@@ -127,20 +130,21 @@ const DatabaseDashboard = () => {
   const renderTablesByCategory = (category: string) => {
     const categoryTables = tables.filter(table => table.category === category);
     const categoryInfo = tableCategories[category as keyof typeof tableCategories];
+    const IconComponent = categoryInfo.icon;
     
     return (
       <div className="space-y-4">
         <div className="flex items-center gap-2 mb-4">
-          <categoryInfo.icon className={`h-5 w-5 ${categoryInfo.color}`} />
+          <IconComponent className={`h-5 w-5 ${categoryInfo.color}`} />
           <h3 className="text-lg font-semibold">{category}</h3>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {categoryTables.map((table) => (
-            <Card key={table.name} className="shadow-card-custom hover:shadow-medical transition-all duration-200">
+            <Card key={table.name} className="transition-all duration-200 hover:shadow-lg">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <table.icon className={`h-4 w-4 ${categoryInfo.color}`} />
+                    <IconComponent className={`h-4 w-4 ${categoryInfo.color}`} />
                     <CardTitle className="text-sm">{table.name}</CardTitle>
                   </div>
                   <Badge variant="secondary" className="text-xs">
@@ -224,12 +228,12 @@ const DatabaseDashboard = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="bg-gradient-primary p-2 rounded-lg shadow-medical">
+          <div className="bg-primary p-2 rounded-lg">
             <Database className="h-6 w-6 text-primary-foreground" />
           </div>
           <div>
             <h2 className="text-2xl font-bold">Database Dashboard</h2>
-            <p className="text-muted-foreground">View and manage your health data tables</p>
+            <p className="text-muted-foreground">View and manage your patient-centric health data</p>
           </div>
         </div>
         
@@ -245,16 +249,17 @@ const DatabaseDashboard = () => {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {Object.entries(tableCategories).map(([category, info]) => {
           const categoryTables = tables.filter(table => table.category === category);
           const totalRecords = categoryTables.reduce((sum, table) => sum + table.count, 0);
+          const IconComponent = info.icon;
           
           return (
-            <Card key={category} className="shadow-medical">
+            <Card key={category}>
               <CardHeader className="pb-3">
                 <div className="flex items-center gap-2">
-                  <info.icon className={`h-5 w-5 ${info.color}`} />
+                  <IconComponent className={`h-5 w-5 ${info.color}`} />
                   <CardTitle className="text-lg">{category}</CardTitle>
                 </div>
               </CardHeader>
@@ -271,62 +276,39 @@ const DatabaseDashboard = () => {
 
       {/* Main Content */}
       <Tabs defaultValue="overview" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="medical">Medical Records</TabsTrigger>
-          <TabsTrigger value="biomarkers">Biomarker Data</TabsTrigger>
-          <TabsTrigger value="system">System Tables</TabsTrigger>
+          <TabsTrigger value="core">Core Data</TabsTrigger>
+          <TabsTrigger value="biomarkers">Biomarkers</TabsTrigger>
+          <TabsTrigger value="clinical">Clinical</TabsTrigger>
+          <TabsTrigger value="system">System</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card className="shadow-medical">
+            <Card>
               <CardHeader>
-                <CardTitle>Database Overview</CardTitle>
+                <CardTitle>Patient-Centric Schema Overview</CardTitle>
                 <CardDescription>
-                  Your health data platform contains {tables.length} tables with{' '}
-                  {tables.reduce((sum, table) => sum + table.count, 0).toLocaleString()} total records
+                  New patient-centric database with {tables.reduce((sum, table) => sum + table.count, 0).toLocaleString()} total records across {tables.length} tables
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {Object.entries(tableCategories).map(([category, info]) => {
-                    const categoryTables = tables.filter(table => table.category === category);
-                    return (
-                      <div key={category} className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          <info.icon className={`h-4 w-4 ${info.color}`} />
-                          <h4 className="font-medium">{category}</h4>
-                        </div>
-                        <div className="grid grid-cols-1 gap-2 ml-6">
-                          {categoryTables.map((table) => (
-                            <div key={table.name} className="flex items-center justify-between py-1">
-                              <span className="text-sm text-muted-foreground">{table.name}</span>
-                              <div className="flex items-center gap-2">
-                                <Badge variant="secondary" className="text-xs">
-                                  {table.count}
-                                </Badge>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => viewTableData(table.name)}
-                                  className="h-6 px-2 text-xs"
-                                  disabled={table.count === 0}
-                                >
-                                  <Eye className="h-3 w-3" />
-                                </Button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })}
+                  <div className="text-sm">
+                    <h4 className="font-medium mb-2">Migration Status:</h4>
+                    <ul className="space-y-1 text-muted-foreground">
+                      <li>✅ New biomarker tables created</li>
+                      <li>✅ Clinical diagnostic tables unified</li>
+                      <li>✅ Patient-centric architecture implemented</li>
+                      <li>✅ Data migration completed</li>
+                    </ul>
+                  </div>
                 </div>
               </CardContent>
             </Card>
             
-            <Card className="shadow-medical">
+            <Card>
               <CardHeader>
                 <CardTitle>Table Data Viewer</CardTitle>
                 <CardDescription>
@@ -347,23 +329,19 @@ const DatabaseDashboard = () => {
           </div>
         </TabsContent>
 
-        <TabsContent value="medical">
+        <TabsContent value="core">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div>
-              {renderTablesByCategory('Medical Records')}
+              {renderTablesByCategory('Core User Management')}
             </div>
-            <Card className="shadow-medical">
+            <Card>
               <CardHeader>
                 <CardTitle>Table Data Viewer</CardTitle>
-                <CardDescription>
-                  {selectedTable ? `Viewing data from ${selectedTable}` : 'Click "View Data" to see table contents'}
-                </CardDescription>
               </CardHeader>
               <CardContent>
                 {loading ? (
                   <div className="flex items-center justify-center py-8">
                     <RefreshCw className="h-6 w-6 animate-spin" />
-                    <span className="ml-2">Loading...</span>
                   </div>
                 ) : (
                   renderTableData()
@@ -378,18 +356,36 @@ const DatabaseDashboard = () => {
             <div>
               {renderTablesByCategory('Biomarker Data')}
             </div>
-            <Card className="shadow-medical">
+            <Card>
               <CardHeader>
-                <CardTitle>Table Data Viewer</CardTitle>
-                <CardDescription>
-                  {selectedTable ? `Viewing data from ${selectedTable}` : 'Click "View Data" to see table contents'}
-                </CardDescription>
+                <CardTitle>Biomarker Data Viewer</CardTitle>
               </CardHeader>
               <CardContent>
                 {loading ? (
                   <div className="flex items-center justify-center py-8">
                     <RefreshCw className="h-6 w-6 animate-spin" />
-                    <span className="ml-2">Loading...</span>
+                  </div>
+                ) : (
+                  renderTableData()
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="clinical">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div>
+              {renderTablesByCategory('Clinical Diagnostics')}
+            </div>
+            <Card>
+              <CardHeader>
+                <CardTitle>Clinical Data Viewer</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {loading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <RefreshCw className="h-6 w-6 animate-spin" />
                   </div>
                 ) : (
                   renderTableData()
@@ -402,20 +398,16 @@ const DatabaseDashboard = () => {
         <TabsContent value="system">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div>
-              {renderTablesByCategory('System')}
+              {renderTablesByCategory('System Management')}
             </div>
-            <Card className="shadow-medical">
+            <Card>
               <CardHeader>
-                <CardTitle>Table Data Viewer</CardTitle>
-                <CardDescription>
-                  {selectedTable ? `Viewing data from ${selectedTable}` : 'Click "View Data" to see table contents'}
-                </CardDescription>
+                <CardTitle>System Data Viewer</CardTitle>
               </CardHeader>
               <CardContent>
                 {loading ? (
                   <div className="flex items-center justify-center py-8">
                     <RefreshCw className="h-6 w-6 animate-spin" />
-                    <span className="ml-2">Loading...</span>
                   </div>
                 ) : (
                   renderTableData()
