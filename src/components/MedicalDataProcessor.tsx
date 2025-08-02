@@ -10,6 +10,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { usePatient } from '@/contexts/PatientContext';
+import { DatabaseMapper } from '@/utils/DatabaseMapper';
 
 interface ProcessingLog {
   id: string;
@@ -167,14 +168,14 @@ const MedicalDataProcessor: React.FC = () => {
       const queryData = { 
         text, 
         filename: file?.name || 'Direct Text Input',
-        patient_id: effectivePatientId  // Add patient ID to the request
+        patient_id: primaryPatient?.id  // Add patient ID to the request
       };
       setProcessing(prev => ({ 
         ...prev, 
         llmQuery: JSON.stringify(queryData, null, 2)
       }));
 
-      addLog('AI Processing', 'info', `Sending ${text.length} characters to Azure OpenAI for Patient ID: ${effectivePatientId}...`);
+      addLog('AI Processing', 'info', `Sending ${text.length} characters to Azure OpenAI for Patient ID: ${primaryPatient?.id}...`);
 
       const { data, error } = await supabase.functions.invoke('process-medical-document', {
         body: queryData,
@@ -203,13 +204,12 @@ const MedicalDataProcessor: React.FC = () => {
       const extractedFields = data.extractedFields || {};
       const documentType = data.documentType || 'unknown';
       const confidence = data.confidence || 0.0;
-      const sqlQueries = data.sqlQueries || [];
 
       addLog('AI Processing', 'success', `AI analysis completed: ${documentType} (${Math.round(confidence * 100)}% confidence)`, {
         documentType,
         confidence,
         fieldsExtracted: Object.keys(extractedFields).length,
-        sqlQueriesGenerated: sqlQueries.length
+        tablesFound: Object.keys(extractedFields).join(', ')
       });
 
       return {
@@ -275,336 +275,87 @@ const MedicalDataProcessor: React.FC = () => {
     }
   };
   
-  const executeLLMSqlQueries = async (sqlQueries: string[]): Promise<any[]> => {
-    addLog('Database Save', 'processing', `Executing ${sqlQueries.length} LLM-generated SQL queries...`);
+  const processExtractedDataToDatabase = async (extractedFields: any): Promise<any[]> => {
+    addLog('Database Processing', 'processing', 'Starting schema-driven database processing...');
     
-    const savedRecords: any[] = [];
-    const { primaryPatient } = usePatient();
-    const effectivePatientId = primaryPatient?.id;
-
-    if (!effectivePatientId) {
-      throw new Error('No patient ID available for database operations');
-    }
-
-    // Execute each LLM-generated SQL query
-    for (let i = 0; i < sqlQueries.length; i++) {
-      const sqlQuery = sqlQueries[i];
-      try {
-        addLog('Database Save', 'processing', `Executing SQL query ${i + 1}/${sqlQueries.length}`);
-
-        // Validate query is an INSERT statement for security
-        if (!sqlQuery.trim().toLowerCase().startsWith('insert')) {
-          addLog('Database Save', 'error', `Skipping non-INSERT query: ${sqlQuery.substring(0, 50)}...`);
-          continue;
-        }
-
-        // Extract table name for tracking
-        const tableMatch = sqlQuery.match(/INSERT INTO\s+(\w+)/i);
-        const tableName = tableMatch ? tableMatch[1] : 'unknown';
-
-        // For clinical_diagnostic_lab_tests, parse and use client methods for security
-        if (tableName === 'clinical_diagnostic_lab_tests') {
-          const valuesMatch = sqlQuery.match(/VALUES\s*\(\s*'([^']+)',\s*'([^']+)',\s*'([^']+)',\s*'([^']+)',\s*([\d.]+|NULL),\s*'([^']*)',\s*'([^']*)',\s*([\d.]+|NULL),\s*([\d.]+|NULL),\s*[^,]+,\s*'([^']+)'\s*\)/i);
-          
-          if (valuesMatch) {
-            const [, patientId, testName, testCategory, testType, numericValue, resultValue, unit, rangeMin, rangeMax, dataSource] = valuesMatch;
-            
-            const insertPayload = {
-              patient_id: effectivePatientId, // Always use our verified patient ID
-              test_name: testName,
-              test_category: testCategory,
-              test_type: testType,
-              numeric_value: numericValue === 'NULL' ? null : parseFloat(numericValue),
-              result_value: resultValue,
-              unit: unit || null,
-              reference_range_min: rangeMin === 'NULL' ? null : parseFloat(rangeMin),
-              reference_range_max: rangeMax === 'NULL' ? null : parseFloat(rangeMax),
-              measurement_time: new Date().toISOString(),
-              data_source: dataSource
-            };
-
-            const { data: insertResult, error: insertError } = await supabase
-              .from('clinical_diagnostic_lab_tests')
-              .insert(insertPayload)
-              .select()
-              .single();
-
-            if (insertError) {
-              addLog('Database Save', 'error', `Failed to insert ${testName}: ${insertError.message}`);
-              continue;
-            }
-
-            savedRecords.push({
-              table: tableName,
-              id: insertResult.id,
-              record: insertResult
-            });
-
-            addLog('Database Save', 'success', `Successfully saved ${testName} to ${tableName}`);
-          }
-        }
-      } catch (error: any) {
-        addLog('Database Save', 'error', `Error executing SQL query ${i + 1}: ${error.message}`);
-        console.error('SQL execution error:', error);
-      }
-    }
-
-    addLog('Database Save', 'success', `Completed SQL execution: ${savedRecords.length} records saved`);
-    return savedRecords;
-  };
-
-  const mapAndSaveToDatabase = async (extractedData: ExtractedData): Promise<any[]> => {
-    addLog('Database Mapping', 'processing', 'Starting schema-driven database mapping...');
-    
-    const savedRecords: any[] = [];
-
-    // Define EXACT database schema - only these columns are allowed
-    const DATABASE_SCHEMA = {
-      clinical_diagnostic_lab_tests: ['test_name', 'test_category', 'test_type', 'numeric_value', 'result_value', 'measurement_time', 'data_source', 'patient_id', 'unit', 'reference_range_min', 'reference_range_max', 'sample_type', 'collection_date'],
-      biomarker_heart: ['measurement_time', 'device_type', 'data_source', 'resting_heart_rate', 'max_heart_rate', 'min_heart_rate', 'average_heart_rate', 'systolic_bp', 'diastolic_bp', 'hrv_score', 'hrv_rmssd', 'hrv_sdnn', 'vo2_max', 'workout_heart_rate', 'recovery_heart_rate', 'walking_heart_rate', 'patient_id'],
-      biomarker_activity: ['measurement_date', 'measurement_time', 'device_type', 'data_source', 'steps_count', 'total_calories', 'active_calories', 'basal_calories', 'exercise_minutes', 'moderate_activity_minutes', 'vigorous_activity_minutes', 'distance_walked_meters', 'distance_ran_meters', 'distance_cycled_meters', 'flights_climbed', 'patient_id'],
-      biomarker_sleep: ['sleep_date', 'measurement_time', 'device_type', 'data_source', 'total_sleep_time', 'deep_sleep_minutes', 'rem_sleep_minutes', 'light_sleep_minutes', 'awake_minutes', 'sleep_efficiency', 'sleep_latency', 'sleep_score', 'sleep_disturbances', 'restfulness_score', 'patient_id'],
-      nutrition_metrics: ['measurement_date', 'total_calories', 'protein_grams', 'carbohydrates_grams', 'fat_grams', 'fiber_grams', 'sugar_grams', 'sodium_mg', 'calcium_mg', 'iron_mg', 'vitamin_d_iu', 'vitamin_b12_mcg', 'vitamin_c_mg'],
-      microbiome_metrics: ['test_date', 'test_provider', 'alpha_diversity', 'beta_diversity', 'beneficial_bacteria_score', 'pathogenic_bacteria_score', 'butyrate_production', 'acetate_production', 'propionate_production', 'species_richness'],
-      environmental_metrics: ['measurement_date', 'measurement_timestamp', 'device_type', 'air_quality_index', 'uv_exposure_minutes', 'weather_temperature', 'humidity_percentage', 'barometric_pressure', 'pm25_level', 'pm10_level'],
-      recovery_strain_metrics: ['measurement_date', 'device_type', 'recovery_score', 'strain_score', 'hrv_score', 'resting_hr_score', 'sleep_performance_score', 'stress_score', 'skin_temperature', 'skin_temperature_deviation']
-    };
-
-    // Schema validation function - ONLY allow exact column matches
-    const validateAndFilterData = (data: any, tableSchema: string[]) => {
-      const filtered: any = {};
-      let validFieldCount = 0;
-      let invalidFieldCount = 0;
-      
-      for (const [key, value] of Object.entries(data)) {
-        if (tableSchema.includes(key) && value !== null && value !== undefined) {
-          // Apply normalization for specific constraint fields
-          if (key === 'abnormal_flag') {
-            const normalizedFlag = normalizeAbnormalFlag(value as string);
-            if (normalizedFlag) {
-              filtered[key] = normalizedFlag;
-              validFieldCount++;
-            }
-          } else {
-            filtered[key] = value;
-            validFieldCount++;
-          }
-        } else {
-          invalidFieldCount++;
-          addLog('Database Mapping', 'warning', `Ignoring invalid field "${key}" - not in schema for table`, { field: key, value, table: tableSchema });
-        }
-      }
-      
-      addLog('Database Mapping', 'info', `Schema validation: ${validFieldCount} valid, ${invalidFieldCount} invalid fields filtered`);
-      return filtered;
-    };
-
-    // Helper function to normalize abnormal_flag values
-    const normalizeAbnormalFlag = (value: string): string | null => {
-      if (!value || typeof value !== 'string') return null;
-      
-      const normalizedValue = value.toLowerCase().trim();
-      
-      // Map common variations to valid database values
-      switch (normalizedValue) {
-        case 'normal':
-        case 'within range':
-        case 'wnl':
-        case 'within normal limits':
-          return 'normal';
-        case 'high':
-        case 'elevated':
-        case 'above range':
-        case 'h':
-          return 'high';
-        case 'low':
-        case 'below range':
-        case 'l':
-          return 'low';
-        case 'critical high':
-        case 'critically high':
-        case 'critical_high':
-        case 'ch':
-          return 'critical_high';
-        case 'critical low':
-        case 'critically low':
-        case 'critical_low':
-        case 'cl':
-          return 'critical_low';
-        default:
-          addLog('Database Mapping', 'warning', `Unknown abnormal_flag value: "${value}", defaulting to 'normal'`);
-          return 'normal'; // Default to normal if unknown
-      }
-    };
-
     try {
       const user = (await supabase.auth.getUser()).data.user;
       if (!user) {
         throw new Error('User not authenticated');
       }
 
-      // Use primary patient if available, otherwise get first patient
-      let patientId = primaryPatient?.id;
-      
-      if (!patientId) {
-        // Get the user's first patient (for fallback)
-        const { data: patients } = await supabase
-          .from('patients')
-          .select('id')
-          .eq('user_id', user.id)
-          .limit(1);
-
-        if (!patients || patients.length === 0) {
-          throw new Error('No patient found. Please create a patient first or refresh the page.');
-        }
-
-        patientId = patients[0].id;
+      if (!primaryPatient?.id) {
+        throw new Error('No patient ID available for database operations');
       }
 
-      // Process each extracted data table according to schema
-      for (const [tableName, data] of Object.entries(extractedData)) {
-        if (!data || typeof data !== 'object') continue;
-
-        // Handle LAB_RESULTS (multiple entries possible)
-        if (tableName.startsWith('LAB_RESULTS') && DATABASE_SCHEMA.clinical_diagnostic_lab_tests) {
-          const validData = validateAndFilterData(data, DATABASE_SCHEMA.clinical_diagnostic_lab_tests);
-          
-          if (!validData.result_name) {
-            addLog('Database Mapping', 'warning', `Skipping ${tableName} - missing required result_name`);
-            continue;
-          }
-
-          const insertQuery = {
-            patient_id: patientId,
-            test_name: validData.result_name,
-            test_category: 'lab_work',
-            test_type: 'blood_chemistry',
-            numeric_value: validData.numeric_value,
-            result_value: validData.numeric_value?.toString() || validData.result_value,
-            unit: validData.units,
-            reference_range_min: validData.reference_range_min,
-            reference_range_max: validData.reference_range_max,
-            measurement_time: new Date().toISOString(),
-            data_source: 'manual_upload'
-          };
-
-          addLog('Database Mapping', 'info', `Building query for lab_results:`, { 
-            table: 'clinical_diagnostic_lab_tests',
-            query: insertQuery,
-            sql: `INSERT INTO clinical_diagnostic_lab_tests (${Object.keys(insertQuery).join(', ')}) VALUES (...)`
-          });
-
-          const { data: result, error } = await supabase
-            .from('clinical_diagnostic_lab_tests')
-            .insert(insertQuery)
-            .select()
-            .single();
-
-          if (error) {
-            addLog('Database Mapping', 'error', `Lab result insertion failed: ${error.message}`, { error, query: insertQuery });
-          } else {
-            savedRecords.push({ table: 'clinical_diagnostic_lab_tests', data: result, confidence: 0.95 });
-            addLog('Database Mapping', 'success', `✅ Lab result saved: ${insertQuery.test_name} = ${insertQuery.numeric_value || insertQuery.result_value}`, { 
-              table: 'clinical_diagnostic_lab_tests',
-              id: result.id,
-              record: result
-            });
-          }
+      // Add patient_id to all extracted data records
+      const processedFields: any = {};
+      for (const [tableName, tableData] of Object.entries(extractedFields)) {
+        if (Array.isArray(tableData)) {
+          processedFields[tableName] = tableData.map((record: any) => ({
+            ...record,
+            patient_id: primaryPatient.id
+          }));
+        } else if (tableData && typeof tableData === 'object') {
+          processedFields[tableName] = [{
+            ...tableData,
+            patient_id: primaryPatient.id
+          }];
         }
-
-        // Handle HEART_METRICS
-        else if (tableName === 'HEART_METRICS' && DATABASE_SCHEMA.biomarker_heart) {
-          const validData = validateAndFilterData(data, DATABASE_SCHEMA.biomarker_heart);
-          
-          if (!validData.measurement_time) {
-            validData.measurement_time = new Date().toISOString();
-          }
-          if (!validData.device_type) {
-            validData.device_type = 'manual';
-          }
-
-          const insertQuery = {
-            ...validData,
-            patient_id: patientId,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          };
-
-          addLog('Database Mapping', 'info', `Building query for biomarker_heart:`, { 
-            table: 'biomarker_heart',
-            query: insertQuery
-          });
-
-          const { data: result, error } = await supabase
-            .from('biomarker_heart')
-            .insert(insertQuery)
-            .select()
-            .single();
-
-          if (error) {
-            addLog('Database Mapping', 'error', `Heart metrics insertion failed: ${error.message}`, { error, query: insertQuery });
-          } else {
-            savedRecords.push({ table: 'heart_metrics', data: result, confidence: 0.90 });
-            addLog('Database Mapping', 'success', `✅ Heart metrics saved`, { 
-              table: 'heart_metrics',
-              id: result.id,
-              record: result
-            });
-          }
-        }
-
-        // Handle ACTIVITY_METRICS
-        else if (tableName === 'ACTIVITY_METRICS' && DATABASE_SCHEMA.biomarker_activity) {
-          const validData = validateAndFilterData(data, DATABASE_SCHEMA.biomarker_activity);
-          
-          if (!validData.measurement_date) {
-            validData.measurement_date = new Date().toISOString().split('T')[0];
-          }
-          if (!validData.measurement_time) {
-            validData.measurement_time = new Date().toISOString();
-          }
-          if (!validData.device_type) {
-            validData.device_type = 'manual';
-          }
-
-          const insertQuery = {
-            ...validData,
-            patient_id: patientId
-          };
-
-          const { data: result, error } = await supabase
-            .from('biomarker_activity')
-            .insert(insertQuery)
-            .select()
-            .single();
-
-          if (error) {
-            addLog('Database Mapping', 'error', `Activity metrics insertion failed: ${error.message}`, { error, query: insertQuery });
-          } else {
-            savedRecords.push({ table: 'activity_metrics', data: result, confidence: 0.90 });
-            addLog('Database Mapping', 'success', `✅ Activity metrics saved`, { 
-              table: 'activity_metrics',
-              id: result.id
-            });
-          }
-        }
-
-        // Handle other biomarker tables following the same pattern
-        else if (Object.keys(DATABASE_SCHEMA).some(schema => tableName.toLowerCase().includes(schema.split('_')[0]))) {
-          addLog('Database Mapping', 'info', `Processing ${tableName} with schema validation...`);
-          // Additional biomarker table processing can be added here following the same pattern
-        }
-
       }
 
-      addLog('Database Mapping', 'success', `Schema-driven mapping completed. Saved ${savedRecords.length} records.`);
+      addLog('Database Processing', 'info', `Processing data for ${Object.keys(processedFields).length} tables`, {
+        tables: Object.keys(processedFields),
+        totalRecords: Object.values(processedFields).reduce((sum: number, data: any) => sum + (Array.isArray(data) ? data.length : 1), 0)
+      });
+
+      // Use DatabaseMapper to process the extracted data
+      const result = await DatabaseMapper.processExtractedData(processedFields);
+
+      // Log detailed results
+      for (const insertResult of result.results) {
+        if (insertResult.success) {
+          addLog('Database Processing', 'success', `Successfully inserted ${insertResult.insertedCount} records into ${insertResult.table}`, {
+            table: insertResult.table,
+            count: insertResult.insertedCount
+          });
+        } else {
+          addLog('Database Processing', 'error', `Failed to insert data into ${insertResult.table}: ${insertResult.errors.join(', ')}`, {
+            table: insertResult.table,
+            errors: insertResult.errors
+          });
+        }
+      }
+
+      // Convert results to the expected format
+      const savedRecords: any[] = [];
+      for (const insertResult of result.results) {
+        if (insertResult.success && insertResult.data) {
+          for (const record of insertResult.data) {
+            savedRecords.push({
+              table: insertResult.table,
+              id: record.id,
+              record: record
+            });
+          }
+        }
+      }
+
+      addLog('Database Processing', 'success', `Database processing completed: ${result.totalProcessed} records processed, ${result.totalErrors} errors`, {
+        totalProcessed: result.totalProcessed,
+        totalErrors: result.totalErrors,
+        successfulTables: result.results.filter(r => r.success).length,
+        failedTables: result.results.filter(r => !r.success).length
+      });
+
       return savedRecords;
-
     } catch (error: any) {
-      addLog('Database Mapping', 'error', `Schema-driven mapping failed: ${error.message}`, { error });
+      addLog('Database Processing', 'error', `Database processing failed: ${error.message}`, { error: error.toString() });
+      console.error('Database processing error:', error);
       throw error;
     }
   };
+
 
   // Enhanced processing function that combines everything
   const processDocumentWithDatabase = async (text: string, filename: string): Promise<void> => {
@@ -631,8 +382,8 @@ const MedicalDataProcessor: React.FC = () => {
         addLog('Duplicate Check', 'warning', `Found ${duplicateCheck.duplicateDetails.length} potential duplicates`, duplicateCheck.duplicateDetails);
       }
 
-      // Step 3: Execute LLM-generated SQL queries instead of manual mapping
-      const savedRecords = await executeLLMSqlQueries(aiResult.sqlQueries || []);
+      // Step 3: Process extracted data using DatabaseMapper
+      const savedRecords = await processExtractedDataToDatabase(aiResult.extractedFields);
       
       setProcessing(prev => ({ ...prev, 
         status: 'completed',
@@ -768,9 +519,9 @@ const MedicalDataProcessor: React.FC = () => {
         }
       }
 
-      // Step 4: Map and save to database
-      updateProcessingStep(4, 'Mapping data to database schema...');
-      const savedRecords = await mapAndSaveToDatabase(aiResponse.extractedFields || {});
+      // Step 4: Process data to database using DatabaseMapper
+      updateProcessingStep(4, 'Processing data with DatabaseMapper...');
+      const savedRecords = await processExtractedDataToDatabase(aiResponse.extractedFields || {});
 
       // Step 5: Complete
       updateProcessingStep(5, 'Processing complete!');
