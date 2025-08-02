@@ -195,38 +195,87 @@ Return the complete structured JSON response with confidence scoring and uncerta
     console.log('📋 RESPONSE FORMAT:', 'json_object');
     console.log('⏰ REQUEST SENT AT:', new Date().toISOString());
 
-    // Call Azure OpenAI API
-    const response = await fetch(`${azureEndpoint}/openai/deployments/${azureDeployment}/chat/completions?api-version=2024-02-01`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${azureApiKey}`,
-        'Content-Type': 'application/json',
-        'api-key': azureApiKey,
-      },
-      body: JSON.stringify({
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
-        ],
-        max_tokens: 4000,
-        temperature: 0.1,
-        response_format: { type: "json_object" }
-      }),
-    });
+    // Call Azure OpenAI API with retry logic for rate limiting
+    let retryCount = 0;
+    const maxRetries = 3;
+    let response: Response | null = null;
+    
+    while (retryCount <= maxRetries) {
+      try {
+        console.log(`🚀 ATTEMPT ${retryCount + 1}/${maxRetries + 1} - CALLING AZURE OPENAI`);
+        
+        response = await fetch(`${azureEndpoint}/openai/deployments/${azureDeployment}/chat/completions?api-version=2024-02-01`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${azureApiKey}`,
+            'Content-Type': 'application/json',
+            'api-key': azureApiKey,
+          },
+          body: JSON.stringify({
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userPrompt }
+            ],
+            max_tokens: 4000,
+            temperature: 0.1,
+            response_format: { type: "json_object" }
+          }),
+        });
 
-    console.log('📥 AZURE OPENAI RESPONSE RECEIVED:');
-    console.log('=====================================');
-    console.log('✅ RESPONSE STATUS:', response.status);
-    console.log('📊 RESPONSE OK:', response.ok);
-    console.log('⏰ RESPONSE RECEIVED AT:', new Date().toISOString());
+        console.log('📥 AZURE OPENAI RESPONSE RECEIVED:');
+        console.log('=====================================');
+        console.log('✅ RESPONSE STATUS:', response.status);
+        console.log('📊 RESPONSE OK:', response.ok);
+        console.log('⏰ RESPONSE RECEIVED AT:', new Date().toISOString());
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ AZURE OPENAI API ERROR:');
-      console.error('Status:', response.status);
-      console.error('Status Text:', response.statusText);
-      console.error('Error Body:', errorText);
-      throw new Error(`Azure OpenAI API error: ${response.status} ${response.statusText}`);
+        // Handle rate limiting (429 status)
+        if (response.status === 429) {
+          const errorText = await response.text();
+          console.log('❌ RATE LIMIT ERROR (429):');
+          console.log('Status Text:', response.statusText);
+          console.log('Error Body:', errorText);
+          console.log('=====================================');
+          
+          // Parse retry-after header or use exponential backoff
+          const retryAfter = response.headers.get('retry-after');
+          const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : Math.pow(2, retryCount) * 2000;
+          
+          if (retryCount < maxRetries) {
+            console.log(`⏳ WAITING ${waitTime / 1000} seconds before retry (attempt ${retryCount + 1}/${maxRetries})...`);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+            retryCount++;
+            continue;
+          } else {
+            throw new Error(`Rate limit exceeded after ${maxRetries + 1} attempts. The Azure OpenAI API is currently rate-limited. Please wait a few minutes and try again.`);
+          }
+        }
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('❌ AZURE OPENAI API ERROR:');
+          console.error('Status:', response.status);
+          console.error('Status Text:', response.statusText);
+          console.error('Error Body:', errorText);
+          console.error('=====================================');
+          throw new Error(`Azure OpenAI API error: ${response.status} ${response.statusText}`);
+        }
+        
+        // Success - break out of retry loop
+        break;
+        
+      } catch (error) {
+        if (retryCount < maxRetries && error.message.includes('fetch')) {
+          console.log(`🔄 NETWORK ERROR - RETRYING (${retryCount + 1}/${maxRetries}): ${error.message}`);
+          retryCount++;
+          await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+          continue;
+        }
+        throw error;
+      }
+    }
+
+    if (!response) {
+      throw new Error('Failed to get response from Azure OpenAI after retries');
     }
 
     const data = await response.json();
