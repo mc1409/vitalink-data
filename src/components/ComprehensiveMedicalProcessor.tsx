@@ -213,21 +213,34 @@ const ComprehensiveMedicalProcessor: React.FC<ComprehensiveMedicalProcessorProps
               continue;
             }
 
+            // Prepare the database insert payload
+            const insertPayload = {
+              patient_id: effectivePatientId,
+              test_name: data.result_name,
+              test_category: 'lab_work',
+              test_type: 'blood_chemistry',
+              numeric_value: data.numeric_value,
+              result_value: data.numeric_value?.toString() || data.result_value,
+              unit: data.units,
+              reference_range_min: data.reference_range_min,
+              reference_range_max: data.reference_range_max,
+              measurement_time: new Date().toISOString(),
+              data_source: 'document_upload'
+            };
+
+            // Log the exact SQL operation being performed
+            console.log('🔍 DATABASE INSERT QUERY:', {
+              table: 'clinical_diagnostic_lab_tests',
+              operation: 'INSERT',
+              payload: insertPayload,
+              sqlEquivalent: `INSERT INTO clinical_diagnostic_lab_tests (patient_id, test_name, test_category, test_type, numeric_value, result_value, unit, reference_range_min, reference_range_max, measurement_time, data_source) VALUES ('${effectivePatientId}', '${data.result_name}', 'lab_work', 'blood_chemistry', ${data.numeric_value}, '${data.numeric_value?.toString() || data.result_value}', '${data.units}', ${data.reference_range_min}, ${data.reference_range_max}, '${new Date().toISOString()}', 'document_upload')`
+            });
+            
+            addLog('Database Save', 'info', `📊 Executing INSERT into clinical_diagnostic_lab_tests for ${data.result_name}`);
+
             const { error: saveError } = await supabase
               .from('clinical_diagnostic_lab_tests')
-              .insert({
-                patient_id: effectivePatientId,
-                test_name: data.result_name,
-                test_category: 'lab_work',
-                test_type: 'blood_chemistry',
-                numeric_value: data.numeric_value,
-                result_value: data.numeric_value?.toString() || data.result_value,
-                unit: data.units,
-                reference_range_min: data.reference_range_min,
-                reference_range_max: data.reference_range_max,
-                measurement_time: new Date().toISOString(),
-                data_source: 'document_upload'
-              });
+              .insert(insertPayload);
             
             if (!saveError) {
               savedCount++;
