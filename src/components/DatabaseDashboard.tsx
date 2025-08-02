@@ -290,30 +290,150 @@ const DatabaseDashboard = () => {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
-          <Card className="shadow-medical">
-            <CardHeader>
-              <CardTitle>Database Overview</CardTitle>
-              <CardDescription>
-                Your health data platform contains {tables.length} tables with{' '}
-                {tables.reduce((sum, table) => sum + table.count, 0).toLocaleString()} total records
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {renderTableData()}
-            </CardContent>
-          </Card>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card className="shadow-medical">
+              <CardHeader>
+                <CardTitle>Database Overview</CardTitle>
+                <CardDescription>
+                  Your health data platform contains {tables.length} tables with{' '}
+                  {tables.reduce((sum, table) => sum + table.count, 0).toLocaleString()} total records
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {Object.entries(tableCategories).map(([category, info]) => {
+                    const categoryTables = tables.filter(table => table.category === category);
+                    return (
+                      <div key={category} className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <info.icon className={`h-4 w-4 ${info.color}`} />
+                          <h4 className="font-medium">{category}</h4>
+                        </div>
+                        <div className="grid grid-cols-1 gap-2 ml-6">
+                          {categoryTables.map((table) => (
+                            <div key={table.name} className="flex items-center justify-between py-1">
+                              <span className="text-sm text-muted-foreground">{table.name}</span>
+                              <div className="flex items-center gap-2">
+                                <Badge variant="secondary" className="text-xs">
+                                  {table.count}
+                                </Badge>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => viewTableData(table.name)}
+                                  className="h-6 px-2 text-xs"
+                                  disabled={table.count === 0}
+                                >
+                                  <Eye className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card className="shadow-medical">
+              <CardHeader>
+                <CardTitle>Table Data Viewer</CardTitle>
+                <CardDescription>
+                  {selectedTable ? `Viewing data from ${selectedTable}` : 'Click "View Data" to see table contents'}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <RefreshCw className="h-6 w-6 animate-spin" />
+                    <span className="ml-2">Loading...</span>
+                  </div>
+                ) : (
+                  renderTableData()
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="medical">
-          {renderTablesByCategory('Medical Records')}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div>
+              {renderTablesByCategory('Medical Records')}
+            </div>
+            <Card className="shadow-medical">
+              <CardHeader>
+                <CardTitle>Table Data Viewer</CardTitle>
+                <CardDescription>
+                  {selectedTable ? `Viewing data from ${selectedTable}` : 'Click "View Data" to see table contents'}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <RefreshCw className="h-6 w-6 animate-spin" />
+                    <span className="ml-2">Loading...</span>
+                  </div>
+                ) : (
+                  renderTableData()
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="biomarkers">
-          {renderTablesByCategory('Biomarker Data')}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div>
+              {renderTablesByCategory('Biomarker Data')}
+            </div>
+            <Card className="shadow-medical">
+              <CardHeader>
+                <CardTitle>Table Data Viewer</CardTitle>
+                <CardDescription>
+                  {selectedTable ? `Viewing data from ${selectedTable}` : 'Click "View Data" to see table contents'}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <RefreshCw className="h-6 w-6 animate-spin" />
+                    <span className="ml-2">Loading...</span>
+                  </div>
+                ) : (
+                  renderTableData()
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="system">
-          {renderTablesByCategory('System')}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div>
+              {renderTablesByCategory('System')}
+            </div>
+            <Card className="shadow-medical">
+              <CardHeader>
+                <CardTitle>Table Data Viewer</CardTitle>
+                <CardDescription>
+                  {selectedTable ? `Viewing data from ${selectedTable}` : 'Click "View Data" to see table contents'}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {loading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <RefreshCw className="h-6 w-6 animate-spin" />
+                    <span className="ml-2">Loading...</span>
+                  </div>
+                ) : (
+                  renderTableData()
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
       </Tabs>
     </div>
