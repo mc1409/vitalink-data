@@ -119,65 +119,80 @@ const HealthKitIntegration: React.FC<HealthKitIntegrationProps> = ({ patientId }
     const measurementDate = measurementTime.toISOString().split('T')[0];
 
     try {
-      const insertPromises = [];
+      const results = [];
 
       // Insert activity data if available
       if (healthData.steps > 0 || healthData.activeCalories > 0) {
-        insertPromises.push(
-          supabase.from('biomarker_activity').upsert({
-            patient_id: patientId,
-            measurement_time: measurementTime.toISOString(),
-            measurement_date: measurementDate,
-            data_source: 'Apple HealthKit',
-            device_type: 'iPhone',
-            steps_count: healthData.steps,
-            distance_walked_meters: Math.round(healthData.distance * 1000),
-            total_calories: healthData.totalCalories,
-            active_calories: healthData.activeCalories
-          }, {
-            onConflict: 'patient_id,measurement_date,data_source'
-          })
-        );
+        const { error } = await supabase.from('biomarker_activity').upsert({
+          patient_id: patientId,
+          measurement_time: measurementTime.toISOString(),
+          measurement_date: measurementDate,
+          data_source: 'Apple HealthKit',
+          device_type: 'iPhone',
+          steps_count: healthData.steps,
+          distance_walked_meters: Math.round(healthData.distance * 1000),
+          total_calories: healthData.totalCalories,
+          active_calories: healthData.activeCalories
+        });
+        
+        if (error) {
+          console.error('Activity upsert error:', error);
+          results.push({ type: 'activity', success: false, error });
+        } else {
+          results.push({ type: 'activity', success: true });
+        }
       }
 
       // Insert heart data if available
       if (healthData.heartRate > 0) {
-        insertPromises.push(
-          supabase.from('biomarker_heart').upsert({
-            patient_id: patientId,
-            measurement_time: measurementTime.toISOString(),
-            data_source: 'Apple HealthKit',
-            device_type: 'iPhone',
-            average_heart_rate: healthData.heartRate,
-            resting_heart_rate: Math.max(30, healthData.heartRate - 15)
-          }, {
-            onConflict: 'patient_id,measurement_time,data_source'
-          })
-        );
+        const { error } = await supabase.from('biomarker_heart').upsert({
+          patient_id: patientId,
+          measurement_time: measurementTime.toISOString(),
+          data_source: 'Apple HealthKit',
+          device_type: 'iPhone',
+          average_heart_rate: healthData.heartRate,
+          resting_heart_rate: Math.max(30, healthData.heartRate - 15)
+        });
+        
+        if (error) {
+          console.error('Heart upsert error:', error);
+          results.push({ type: 'heart', success: false, error });
+        } else {
+          results.push({ type: 'heart', success: true });
+        }
       }
 
       // Insert sleep data if available
       if (healthData.sleepHours > 0) {
-        insertPromises.push(
-          supabase.from('biomarker_sleep').upsert({
-            patient_id: patientId,
-            measurement_time: measurementTime.toISOString(),
-            sleep_date: measurementDate,
-            data_source: 'Apple HealthKit',
-            device_type: 'iPhone',
-            total_sleep_time: Math.round(healthData.sleepHours * 60),
-            sleep_efficiency: 85 // Default efficiency
-          }, {
-            onConflict: 'patient_id,sleep_date,data_source'
-          })
-        );
+        const { error } = await supabase.from('biomarker_sleep').upsert({
+          patient_id: patientId,
+          measurement_time: measurementTime.toISOString(),
+          sleep_date: measurementDate,
+          data_source: 'Apple HealthKit',
+          device_type: 'iPhone',
+          total_sleep_time: Math.round(healthData.sleepHours * 60),
+          sleep_efficiency: 85 // Default efficiency
+        });
+        
+        if (error) {
+          console.error('Sleep upsert error:', error);
+          results.push({ type: 'sleep', success: false, error });
+        } else {
+          results.push({ type: 'sleep', success: true });
+        }
       }
 
-      await Promise.all(insertPromises);
-      return { success: true, recordCount: insertPromises.length };
+      const successCount = results.filter(r => r.success).length;
+      const failures = results.filter(r => !r.success);
+      
+      return { 
+        success: failures.length === 0, 
+        recordCount: successCount,
+        failures: failures
+      };
     } catch (error) {
-      console.error('Error inserting biomarker data:', error);
-      return { success: false, error };
+      console.error('Error processing biomarker data:', error);
+      return { success: false, error, failures: [] };
     }
   };
 
@@ -185,11 +200,38 @@ const HealthKitIntegration: React.FC<HealthKitIntegrationProps> = ({ patientId }
     if (!isConnected || !patientId) return;
 
     setIsSyncing(true);
+    
     try {
       const syncStartTime = new Date();
+      console.log('🔄 Starting HealthKit sync...');
       
-      // Fetch data from HealthKit
-      const healthData = await syncData();
+      // Fetch data from HealthKit with retry logic
+      let healthData;
+      let attempts = 0;
+      const maxRetries = 3;
+      
+      while (attempts < maxRetries) {
+        try {
+          healthData = await syncData();
+          break;
+        } catch (error: any) {
+          attempts++;
+          console.error(`❌ Sync attempt ${attempts} failed:`, error);
+          
+          if (error.message?.includes('Load failed') && attempts < maxRetries) {
+            console.log(`🔄 Retrying in ${attempts * 1000}ms...`);
+            await new Promise(resolve => setTimeout(resolve, attempts * 1000));
+            continue;
+          }
+          throw error;
+        }
+      }
+      
+      if (!healthData) {
+        throw new Error('Failed to fetch HealthKit data after retries');
+      }
+      
+      console.log('✅ HealthKit data fetched successfully');
       
       // Process and store the data
       const result = await processBiomarkerData(healthData);
@@ -203,13 +245,20 @@ const HealthKitIntegration: React.FC<HealthKitIntegrationProps> = ({ patientId }
           .eq('device_type', 'healthkit');
 
         setLastSyncTime(syncStartTime.toISOString());
-        toast.success(`Sync completed! ${result.recordCount} biomarker records updated`);
+        toast.success(`✅ Sync completed! ${result.recordCount} biomarker records updated`);
       } else {
-        toast.error('Failed to process biomarker data');
+        const errorSummary = result.failures?.map(f => `${f.type}: ${f.error?.message || 'Unknown error'}`).join(', ');
+        console.error('❌ Biomarker processing failed:', errorSummary);
+        toast.error(`⚠️ Partial sync failure: ${errorSummary}`);
       }
-    } catch (error) {
-      console.error('Sync error:', error);
-      toast.error('Sync failed. Please try again.');
+    } catch (error: any) {
+      console.error('❌ Sync error:', error);
+      
+      if (error.message?.includes('Load failed')) {
+        toast.error('🔌 Network error: Unable to connect to HealthKit. Please check your connection and try again.');
+      } else {
+        toast.error(`❌ Sync failed: ${error.message || 'Unknown error'}`);
+      }
     } finally {
       setIsSyncing(false);
     }
