@@ -251,9 +251,9 @@ const MedicalDataProcessor: React.FC = () => {
       for (const [tableName, data] of Object.entries(extractedData)) {
         if (tableName.startsWith('LAB_RESULTS') && data && data.result_name) {
           const { data: existingResults } = await supabase
-            .from('lab_results')
+            .from('clinical_diagnostic_lab_tests')
             .select('*')
-            .eq('result_name', data.result_name)
+            .eq('test_name', data.result_name)
             .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()) // Last 24 hours
             .limit(1);
 
@@ -391,7 +391,7 @@ const MedicalDataProcessor: React.FC = () => {
           });
 
           const { data: result, error } = await supabase
-            .from('lab_results')
+            .from('clinical_diagnostic_lab_tests')
             .insert(insertQuery)
             .select()
             .single();
@@ -432,7 +432,7 @@ const MedicalDataProcessor: React.FC = () => {
           });
 
           const { data: result, error } = await supabase
-            .from('heart_metrics')
+            .from('biomarker_heart')
             .insert(insertQuery)
             .select()
             .single();
@@ -469,7 +469,7 @@ const MedicalDataProcessor: React.FC = () => {
           };
 
           const { data: result, error } = await supabase
-            .from('activity_metrics')
+            .from('biomarker_activity')
             .insert(insertQuery)
             .select()
             .single();

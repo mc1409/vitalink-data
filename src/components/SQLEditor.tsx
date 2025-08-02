@@ -32,38 +32,116 @@ WHERE table_schema = 'public'
 ORDER BY table_name;`
     },
     {
-      name: "Patient Data",
-      query: "SELECT * FROM patients LIMIT 10;"
+      name: "All Patients",
+      query: "SELECT first_name, last_name, date_of_birth, gender, email FROM patients ORDER BY created_at DESC LIMIT 20;"
     },
     {
-      name: "Lab Results",
-      query: "SELECT result_name, numeric_value, units, abnormal_flag FROM lab_results LIMIT 10;"
-    },
-    {
-      name: "Document Processing Logs",
-      query: "SELECT filename, processing_status, ai_analysis_status, created_at FROM document_processing_logs ORDER BY created_at DESC LIMIT 10;"
-    },
-    {
-      name: "Recent Activity Metrics",
+      name: "All Lab Test Results",
       query: `SELECT 
-  measurement_date, 
-  device_type, 
-  steps_count, 
-  total_calories 
-FROM activity_metrics 
-ORDER BY measurement_date DESC 
-LIMIT 5;`
+  p.first_name, p.last_name,
+  test_name, test_category,
+  numeric_value, result_value,
+  measurement_time
+FROM clinical_diagnostic_lab_tests l
+JOIN patients p ON l.patient_id = p.id
+ORDER BY measurement_time DESC 
+LIMIT 50;`
     },
     {
-      name: "Heart Metrics Summary",
+      name: "All Biomarker Data Overview",
       query: `SELECT 
-  measurement_timestamp, 
-  resting_heart_rate, 
-  average_heart_rate, 
-  max_heart_rate 
-FROM heart_metrics 
-ORDER BY measurement_timestamp DESC 
-LIMIT 10;`
+  'Activity' as type, patient_id, measurement_time, 
+  CONCAT(steps_count, ' steps, ', total_calories, ' cal') as summary
+FROM biomarker_activity
+UNION ALL
+SELECT 
+  'Heart' as type, patient_id, measurement_time,
+  CONCAT(resting_heart_rate, ' bpm rest, ', average_heart_rate, ' bpm avg') as summary
+FROM biomarker_heart
+UNION ALL
+SELECT 
+  'Sleep' as type, patient_id, measurement_time,
+  CONCAT(total_sleep_time, ' min sleep, ', sleep_score, ' score') as summary
+FROM biomarker_sleep
+ORDER BY measurement_time DESC 
+LIMIT 100;`
+    },
+    {
+      name: "Sleep Data - Last 10 Days",
+      query: `SELECT 
+  p.first_name, p.last_name,
+  sleep_date,
+  total_sleep_time,
+  deep_sleep_minutes,
+  rem_sleep_minutes,
+  sleep_score,
+  sleep_efficiency
+FROM biomarker_sleep s
+JOIN patients p ON s.patient_id = p.id
+WHERE sleep_date >= CURRENT_DATE - INTERVAL '10 days'
+ORDER BY sleep_date DESC, p.last_name;`
+    },
+    {
+      name: "Activity Summary - Last 7 Days",
+      query: `SELECT 
+  p.first_name, p.last_name,
+  measurement_date,
+  steps_count,
+  total_calories,
+  active_calories,
+  distance_walked_meters
+FROM biomarker_activity a
+JOIN patients p ON a.patient_id = p.id
+WHERE measurement_date >= CURRENT_DATE - INTERVAL '7 days'
+ORDER BY measurement_date DESC, steps_count DESC;`
+    },
+    {
+      name: "Heart Rate Trends",
+      query: `SELECT 
+  p.first_name, p.last_name,
+  DATE(measurement_time) as date,
+  AVG(resting_heart_rate) as avg_resting_hr,
+  AVG(average_heart_rate) as avg_hr,
+  MAX(max_heart_rate) as max_hr,
+  COUNT(*) as readings
+FROM biomarker_heart h
+JOIN patients p ON h.patient_id = p.id
+WHERE measurement_time >= CURRENT_DATE - INTERVAL '30 days'
+GROUP BY p.id, p.first_name, p.last_name, DATE(measurement_time)
+ORDER BY date DESC;`
+    },
+    {
+      name: "Clinical Test Summary by Patient",
+      query: `SELECT 
+  p.first_name, p.last_name,
+  COUNT(DISTINCT test_category) as test_categories,
+  COUNT(*) as total_tests,
+  MAX(measurement_time) as latest_test,
+  MIN(measurement_time) as earliest_test
+FROM clinical_diagnostic_lab_tests l
+JOIN patients p ON l.patient_id = p.id
+GROUP BY p.id, p.first_name, p.last_name
+ORDER BY total_tests DESC;`
+    },
+    {
+      name: "Complete Patient Health Profile",
+      query: `SELECT 
+  p.first_name, p.last_name, p.date_of_birth,
+  -- Latest biomarker data
+  (SELECT steps_count FROM biomarker_activity WHERE patient_id = p.id ORDER BY measurement_time DESC LIMIT 1) as latest_steps,
+  (SELECT resting_heart_rate FROM biomarker_heart WHERE patient_id = p.id ORDER BY measurement_time DESC LIMIT 1) as latest_resting_hr,
+  (SELECT total_sleep_time FROM biomarker_sleep WHERE patient_id = p.id ORDER BY measurement_time DESC LIMIT 1) as latest_sleep_time,
+  -- Test counts
+  (SELECT COUNT(*) FROM clinical_diagnostic_lab_tests WHERE patient_id = p.id) as total_lab_tests,
+  -- Latest activity
+  GREATEST(
+    COALESCE((SELECT MAX(measurement_time) FROM biomarker_activity WHERE patient_id = p.id), '1900-01-01'::timestamp),
+    COALESCE((SELECT MAX(measurement_time) FROM biomarker_heart WHERE patient_id = p.id), '1900-01-01'::timestamp),
+    COALESCE((SELECT MAX(measurement_time) FROM biomarker_sleep WHERE patient_id = p.id), '1900-01-01'::timestamp),
+    COALESCE((SELECT MAX(measurement_time) FROM clinical_diagnostic_lab_tests WHERE patient_id = p.id), '1900-01-01'::timestamp)
+  ) as latest_data
+FROM patients p
+ORDER BY latest_data DESC;`
     }
   ];
 

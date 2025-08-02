@@ -423,8 +423,11 @@ const PDFUploadProcessor: React.FC = () => {
                 patient_id: patientId,
                 test_name: tableData.result_name || 'Blood Work',
                 test_category: 'Laboratory',
-                order_date: new Date().toISOString().split('T')[0],
-                test_status: 'completed',
+                test_type: 'blood_test',
+                data_source: 'manual_entry',
+                measurement_time: new Date().toISOString(),
+                numeric_value: tableData.numeric_value,
+                result_value: tableData.result_value,
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString()
               };
@@ -432,7 +435,7 @@ const PDFUploadProcessor: React.FC = () => {
               console.log('📝 INSERTING LAB TEST:', JSON.stringify(labTestRecord, null, 2));
 
               const { data: labTest, error: labTestError } = await supabase
-                .from('lab_tests')
+                .from('clinical_diagnostic_lab_tests')
                 .insert(labTestRecord)
                 .select('id')
                 .single();
