@@ -16,15 +16,18 @@ const SimpleTableViewer: React.FC = () => {
   const [tableData, setTableData] = useState<TableData[]>([]);
   const [loading, setLoading] = useState(false);
   const [availableTables] = useState([
-    'patients',
-    'lab_results', 
-    'lab_tests',
-    'document_processing_logs',
     'profiles',
-    'heart_metrics',
-    'sleep_metrics',
-    'activity_metrics',
-    'nutrition_metrics'
+    'patients',
+    'biomarker_heart',
+    'biomarker_sleep', 
+    'biomarker_activity',
+    'biomarker_nutrition',
+    'biomarker_biological_genetic_microbiome',
+    'clinical_diagnostic_lab_tests',
+    'clinical_diagnostic_cardiovascular',
+    'device_integrations',
+    'document_processing_logs',
+    'test_standardization_map'
   ]);
 
   const loadTableData = async (tableName: string) => {
