@@ -278,41 +278,68 @@ const ComprehensiveMedicalProcessor: React.FC<ComprehensiveMedicalProcessorProps
             }
           }
 
-          // Execute the SQL query using execute_sql function
-          const { data: executionResult, error: executionError } = await supabase
-            .rpc('execute_sql', { query_text: `SELECT 1 as executed` }); // For safety, we'll use client methods instead
-
           // Since we can't execute raw SQL for security, we'll parse and use client methods
           // Extract values from the SQL query for client insertion
           if (tableName === 'clinical_diagnostic_lab_tests') {
-            const values = sqlQuery.match(/VALUES\s*\((.*)\)/i);
-            if (values) {
-              const valueString = values[1];
-              // Parse the values (simplified - would need more robust parsing in production)
-              const matches = valueString.match(/'([^']+)'/g);
-              if (matches && matches.length >= 2) {
+            try {
+              // More robust SQL parsing for clinical_diagnostic_lab_tests
+              const valuesMatch = sqlQuery.match(/VALUES\s*\(\s*'([^']+)',\s*'([^']+)',\s*'([^']+)',\s*'([^']+)',\s*([\d.]+|NULL),\s*'([^']*)',\s*'([^']*)',\s*([\d.]+|NULL),\s*([\d.]+|NULL),\s*'([^']+)',\s*'([^']+)'\s*\)/i);
+              
+              if (valuesMatch) {
+                const [, patientId, testName, testCategory, testType, numericValue, resultValue, unit, rangeMin, rangeMax, measurementTime, dataSource] = valuesMatch;
+                
+                console.log('🔍 PARSED SQL VALUES:', {
+                  patientId, testName, testCategory, testType, 
+                  numericValue, resultValue, unit, rangeMin, rangeMax, 
+                  measurementTime, dataSource
+                });
+
+                // Validate that the patient ID matches what we expect
+                if (patientId !== effectivePatientId) {
+                  addLog('Database Save', 'warning', `Patient ID mismatch: SQL has ${patientId}, expected ${effectivePatientId}`);
+                }
+
                 const insertPayload = {
-                  patient_id: effectivePatientId,
-                  test_name: matches[1].replace(/'/g, ''),
-                  test_category: 'lab_work',
-                  test_type: 'blood_chemistry',
-                  measurement_time: new Date().toISOString(),
-                  data_source: 'document_upload'
+                  patient_id: effectivePatientId, // Always use our verified patient ID
+                  test_name: testName,
+                  test_category: testCategory,
+                  test_type: testType,
+                  numeric_value: numericValue === 'NULL' ? null : parseFloat(numericValue),
+                  result_value: resultValue,
+                  unit: unit || null,
+                  reference_range_min: rangeMin === 'NULL' ? null : parseFloat(rangeMin),
+                  reference_range_max: rangeMax === 'NULL' ? null : parseFloat(rangeMax),
+                  measurement_time: new Date().toISOString(), // Use current time for safety
+                  data_source: dataSource
                 };
+
+                console.log('🔍 INSERT PAYLOAD:', insertPayload);
 
                 const { data: insertResult, error: insertError } = await supabase
                   .from('clinical_diagnostic_lab_tests')
-                  .insert(insertPayload);
+                  .insert(insertPayload)
+                  .select();
 
                 if (insertError) {
                   console.error('❌ INSERT ERROR:', insertError);
-                  addLog('Database Save', 'error', `Failed to save record: ${insertError.message}`);
+                  addLog('Database Save', 'error', `Failed to save ${testName}: ${insertError.message}`);
                   continue;
                 }
 
-                savedCount++;
-                addLog('Database Save', 'success', `✅ Saved: ${matches[1].replace(/'/g, '')} → Patient ID: ${effectivePatientId}`);
+                if (insertResult && insertResult.length > 0) {
+                  savedCount++;
+                  addLog('Database Save', 'success', `✅ Saved: ${testName} = ${resultValue} ${unit || ''} → Patient ID: ${effectivePatientId}`);
+                  console.log('✅ SUCCESSFULLY INSERTED:', insertResult[0]);
+                } else {
+                  addLog('Database Save', 'error', `Failed to save ${testName}: No data returned`);
+                }
+              } else {
+                addLog('Database Save', 'error', `Failed to parse SQL values from: ${sqlQuery.substring(0, 100)}...`);
+                console.error('❌ SQL PARSING FAILED:', sqlQuery);
               }
+            } catch (parseError: any) {
+              addLog('Database Save', 'error', `SQL parsing error: ${parseError.message}`);
+              console.error('❌ SQL PARSING ERROR:', parseError);
             }
           }
 
