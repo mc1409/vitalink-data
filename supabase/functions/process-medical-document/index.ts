@@ -159,7 +159,7 @@ Return the complete structured JSON response with confidence scoring and uncerta
     console.log('🤖 MODEL DEPLOYMENT:', azureDeployment);
     console.log('📊 SYSTEM PROMPT LENGTH:', systemPrompt.length);
     console.log('📝 USER PROMPT LENGTH:', userPrompt.length);
-    console.log('🎯 MAX TOKENS:', 4000);
+    console.log('🎯 MAX TOKENS:', 8000);
     console.log('🌡️ TEMPERATURE:', 0.1);
     console.log('📋 RESPONSE FORMAT:', 'json_object');
     console.log('⏰ REQUEST SENT AT:', new Date().toISOString());
@@ -185,7 +185,7 @@ Return the complete structured JSON response with confidence scoring and uncerta
               { role: 'system', content: systemPrompt },
               { role: 'user', content: userPrompt }
             ],
-            max_tokens: 4000,
+            max_tokens: 8000,
             temperature: 0.1,
             response_format: { type: "json_object" }
           }),
