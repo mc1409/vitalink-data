@@ -217,7 +217,7 @@ const ComprehensiveMedicalProcessor: React.FC<ComprehensiveMedicalProcessorProps
       updateProgress(75, 'saving');
 
       // Step 5: Execute LLM-Generated SQL Queries
-      addLog('Database Save', 'processing', 'Executing LLM-generated SQL queries...');
+      addLog('Database Save', 'processing', `Executing LLM-generated SQL queries for Patient ID: ${effectivePatientId}...`);
       
       let savedCount = 0;
       
@@ -317,7 +317,7 @@ const ComprehensiveMedicalProcessor: React.FC<ComprehensiveMedicalProcessorProps
                 }
 
                 savedCount++;
-                addLog('Database Save', 'success', `✅ Saved: ${matches[1].replace(/'/g, '')}`);
+                addLog('Database Save', 'success', `✅ Saved: ${matches[1].replace(/'/g, '')} → Patient ID: ${effectivePatientId}`);
               }
             }
           }
@@ -445,11 +445,17 @@ const ComprehensiveMedicalProcessor: React.FC<ComprehensiveMedicalProcessorProps
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* Patient Info */}
+          {/* Patient Info with ID Display */}
           <Alert>
             <User className="h-4 w-4" />
-            <AlertDescription>
-              <strong>Patient:</strong> {effectivePatientName} | <strong>Processing:</strong> Full document analysis with database storage
+            <AlertDescription className="space-y-1">
+              <div className="flex items-center gap-4 flex-wrap">
+                <span><strong>Patient:</strong> {effectivePatientName}</span>
+                <span><strong>Patient ID:</strong> <code className="bg-muted px-2 py-1 rounded text-sm font-mono">{effectivePatientId}</code></span>
+              </div>
+              <div className="text-sm text-muted-foreground">
+                This Patient ID will be used for all database records during document processing
+              </div>
             </AlertDescription>
           </Alert>
 
@@ -466,15 +472,26 @@ const ComprehensiveMedicalProcessor: React.FC<ComprehensiveMedicalProcessorProps
               </p>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-3">
               <Button
                 disabled={isProcessing}
                 onClick={() => document.getElementById('comprehensive-file-upload')?.click()}
                 className="gap-2"
+                size="lg"
               >
                 {isProcessing && <Loader2 className="h-4 w-4 animate-spin" />}
-                Choose File
+                Process Medical Data
               </Button>
+              
+              {/* Patient ID Confirmation */}
+              <div className="text-xs text-muted-foreground border rounded-md p-2 bg-muted/50">
+                <div className="flex items-center gap-2">
+                  <Database className="h-3 w-3" />
+                  <span>Target Patient ID: <code className="font-mono bg-background px-1 rounded">{effectivePatientId}</code></span>
+                </div>
+                <div className="mt-1">All extracted data will be linked to this patient</div>
+              </div>
+              
               <input
                 id="comprehensive-file-upload"
                 type="file"
