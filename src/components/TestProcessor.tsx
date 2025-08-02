@@ -78,7 +78,28 @@ non-pregnant individual...`;
             data_source: 'test_upload'
           };
 
-          console.log('🧪 ATTEMPTING INSERT:', insertPayload);
+          console.log('🧪 ATTEMPTING INSERT WITH REAL PATIENT ID:', insertPayload);
+          console.log('🧪 PATIENT ID:', primaryPatient.id, 'TYPE:', typeof primaryPatient.id);
+          
+          // Show the exact SQL that would be executed
+          console.log('🧪 EQUIVALENT SQL QUERY:');
+          console.log(`INSERT INTO clinical_diagnostic_lab_tests (
+            patient_id, test_name, test_category, test_type, 
+            numeric_value, result_value, unit, reference_range_min, 
+            reference_range_max, measurement_time, data_source
+          ) VALUES (
+            '${insertPayload.patient_id}',
+            '${insertPayload.test_name}',
+            '${insertPayload.test_category}',
+            '${insertPayload.test_type}',
+            ${insertPayload.numeric_value},
+            '${insertPayload.result_value}',
+            '${insertPayload.unit}',
+            ${insertPayload.reference_range_min || 'NULL'},
+            ${insertPayload.reference_range_max || 'NULL'},
+            '${insertPayload.measurement_time}',
+            '${insertPayload.data_source}'
+          )`);
 
           const { data: insertedData, error: saveError } = await supabase
             .from('clinical_diagnostic_lab_tests')
