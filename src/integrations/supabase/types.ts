@@ -14,53 +14,6 @@ export type Database = {
   }
   public: {
     Tables: {
-      allergies: {
-        Row: {
-          active: boolean | null
-          allergen: string
-          created_at: string
-          id: string
-          notes: string | null
-          onset_date: string | null
-          patient_id: string
-          reaction: string
-          severity: string | null
-          updated_at: string
-        }
-        Insert: {
-          active?: boolean | null
-          allergen: string
-          created_at?: string
-          id?: string
-          notes?: string | null
-          onset_date?: string | null
-          patient_id: string
-          reaction: string
-          severity?: string | null
-          updated_at?: string
-        }
-        Update: {
-          active?: boolean | null
-          allergen?: string
-          created_at?: string
-          id?: string
-          notes?: string | null
-          onset_date?: string | null
-          patient_id?: string
-          reaction?: string
-          severity?: string | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "allergies_patient_id_fkey"
-            columns: ["patient_id"]
-            isOneToOne: false
-            referencedRelation: "patients"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       biomarker_activity: {
         Row: {
           active_calories: number | null
