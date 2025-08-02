@@ -14,8 +14,13 @@ const Auth = () => {
   const [email, setEmail] = useState('mc14o9all@gmail.com'); // Pre-filled for development
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [dateOfBirth, setDateOfBirth] = useState('');
+  const [gender, setGender] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [currentStep, setCurrentStep] = useState(1);
   const { signUp, signIn, user } = useAuth();
   const navigate = useNavigate();
 
@@ -28,33 +33,68 @@ const Auth = () => {
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    setIsLoading(true);
 
-    if (!email || !password) {
-      setError('Please fill in all fields');
-      setIsLoading(false);
-      return;
-    }
-
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters');
-      setIsLoading(false);
-      return;
-    }
-
-    const { error } = await signUp(email, password, displayName);
-    
-    if (error) {
-      if (error.message.includes('User already registered')) {
-        setError('An account with this email already exists. Try signing in instead.');
-      } else {
-        setError(error.message);
+    // Step 1: Basic account info
+    if (currentStep === 1) {
+      if (!email || !password || !displayName) {
+        setError('Please fill in all fields');
+        return;
       }
-    } else {
-      toast.success('Account created successfully! Please check your email to verify your account.');
+
+      if (password.length < 6) {
+        setError('Password must be at least 6 characters');
+        return;
+      }
+
+      setCurrentStep(2);
+      return;
     }
-    
-    setIsLoading(false);
+
+    // Step 2: Patient info and account creation
+    if (currentStep === 2) {
+      if (!firstName || !lastName || !dateOfBirth) {
+        setError('Please fill in all patient information fields');
+        return;
+      }
+
+      setIsLoading(true);
+
+      try {
+        // Create the account first
+        const { error: authError } = await signUp(email, password, displayName);
+        
+        if (authError) {
+          throw authError;
+        }
+
+        // Account creation successful - we'll create patient info in the auth trigger
+        // Store patient info in localStorage temporarily for the trigger to access
+        localStorage.setItem('pendingPatientInfo', JSON.stringify({
+          firstName,
+          lastName,
+          dateOfBirth,
+          gender
+        }));
+
+        toast.success('Account created successfully! Your patient profile will be set up automatically.');
+        
+        // Reset form
+        setCurrentStep(1);
+        setFirstName('');
+        setLastName('');
+        setDateOfBirth('');
+        setGender('');
+        
+      } catch (error: any) {
+        if (error.message.includes('User already registered')) {
+          setError('An account with this email already exists. Try signing in instead.');
+        } else {
+          setError(error.message);
+        }
+      }
+      
+      setIsLoading(false);
+    }
   };
 
   const handleSignIn = async (e: React.FormEvent) => {
@@ -237,45 +277,130 @@ const Auth = () => {
               
               <TabsContent value="signup">
                 <form onSubmit={handleSignUp} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-name">Display Name (Optional)</Label>
-                    <Input
-                      id="signup-name"
-                      type="text"
-                      placeholder="Your Name"
-                      value={displayName}
-                      onChange={(e) => setDisplayName(e.target.value)}
-                      disabled={isLoading}
-                      className="transition-all focus:shadow-medical"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-email">Email</Label>
-                    <Input
-                      id="signup-email"
-                      type="email"
-                      placeholder="your.email@example.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      disabled={isLoading}
-                      className="transition-all focus:shadow-medical"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-password">Password</Label>
-                    <Input
-                      id="signup-password"
-                      type="password"
-                      placeholder="••••••••"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      disabled={isLoading}
-                      className="transition-all focus:shadow-medical"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Password must be at least 6 characters long
-                    </p>
-                  </div>
+                  {currentStep === 1 && (
+                    <>
+                      <div className="text-center mb-4">
+                        <h3 className="text-lg font-semibold">Step 1: Account Information</h3>
+                        <p className="text-sm text-muted-foreground">Create your secure account</p>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <Label htmlFor="signup-name">Display Name *</Label>
+                        <Input
+                          id="signup-name"
+                          type="text"
+                          placeholder="Your Name"
+                          value={displayName}
+                          onChange={(e) => setDisplayName(e.target.value)}
+                          disabled={isLoading}
+                          className="transition-all focus:shadow-medical"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="signup-email">Email *</Label>
+                        <Input
+                          id="signup-email"
+                          type="email"
+                          placeholder="your.email@example.com"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          disabled={isLoading}
+                          className="transition-all focus:shadow-medical"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="signup-password">Password *</Label>
+                        <Input
+                          id="signup-password"
+                          type="password"
+                          placeholder="••••••••"
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          disabled={isLoading}
+                          className="transition-all focus:shadow-medical"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Password must be at least 6 characters long
+                        </p>
+                      </div>
+                    </>
+                  )}
+
+                  {currentStep === 2 && (
+                    <>
+                      <div className="text-center mb-4">
+                        <h3 className="text-lg font-semibold">Step 2: Patient Information</h3>
+                        <p className="text-sm text-muted-foreground">Set up your health profile</p>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="patient-first-name">First Name *</Label>
+                          <Input
+                            id="patient-first-name"
+                            type="text"
+                            placeholder="John"
+                            value={firstName}
+                            onChange={(e) => setFirstName(e.target.value)}
+                            disabled={isLoading}
+                            className="transition-all focus:shadow-medical"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="patient-last-name">Last Name *</Label>
+                          <Input
+                            id="patient-last-name"
+                            type="text"
+                            placeholder="Doe"
+                            value={lastName}
+                            onChange={(e) => setLastName(e.target.value)}
+                            disabled={isLoading}
+                            className="transition-all focus:shadow-medical"
+                          />
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <Label htmlFor="patient-dob">Date of Birth *</Label>
+                        <Input
+                          id="patient-dob"
+                          type="date"
+                          value={dateOfBirth}
+                          onChange={(e) => setDateOfBirth(e.target.value)}
+                          disabled={isLoading}
+                          className="transition-all focus:shadow-medical"
+                        />
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <Label htmlFor="patient-gender">Gender</Label>
+                        <select
+                          id="patient-gender"
+                          value={gender}
+                          onChange={(e) => setGender(e.target.value)}
+                          disabled={isLoading}
+                          className="w-full px-3 py-2 border border-input bg-background rounded-md text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        >
+                          <option value="">Select gender...</option>
+                          <option value="male">Male</option>
+                          <option value="female">Female</option>
+                          <option value="other">Other</option>
+                        </select>
+                      </div>
+
+                      <div className="flex gap-2">
+                        <Button 
+                          type="button"
+                          variant="outline"
+                          onClick={() => setCurrentStep(1)}
+                          className="flex-1"
+                          disabled={isLoading}
+                        >
+                          Back
+                        </Button>
+                      </div>
+                    </>
+                  )}
                   
                   {error && (
                     <Alert variant="destructive">
@@ -289,7 +414,7 @@ const Auth = () => {
                     disabled={isLoading}
                   >
                     {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Create Account
+                    {currentStep === 1 ? 'Continue to Patient Info' : 'Create Account & Patient Profile'}
                   </Button>
                 </form>
               </TabsContent>

@@ -995,6 +995,7 @@ export type Database = {
           display_name: string | null
           gender: string | null
           id: string
+          primary_patient_id: string | null
           updated_at: string
           user_id: string
         }
@@ -1004,6 +1005,7 @@ export type Database = {
           display_name?: string | null
           gender?: string | null
           id?: string
+          primary_patient_id?: string | null
           updated_at?: string
           user_id: string
         }
@@ -1013,10 +1015,19 @@ export type Database = {
           display_name?: string | null
           gender?: string | null
           id?: string
+          primary_patient_id?: string | null
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_primary_patient_id_fkey"
+            columns: ["primary_patient_id"]
+            isOneToOne: false
+            referencedRelation: "patients"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
