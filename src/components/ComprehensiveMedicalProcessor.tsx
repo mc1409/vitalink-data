@@ -228,6 +228,33 @@ const ComprehensiveMedicalProcessor: React.FC<ComprehensiveMedicalProcessorProps
               data_source: 'document_upload'
             };
 
+            // Check for duplicate first
+            console.log('🔍 CHECKING FOR DUPLICATES...', {
+              table: 'clinical_diagnostic_lab_tests',
+              test_name: data.result_name,
+              patient_id: effectivePatientId,
+              timeRange: new Date(Date.now() - 60000).toISOString() // Last minute
+            });
+
+            const { data: existingRecords, error: duplicateCheckError } = await supabase
+              .from('clinical_diagnostic_lab_tests')
+              .select('*')
+              .eq('test_name', data.result_name)
+              .eq('patient_id', effectivePatientId)
+              .gte('created_at', new Date(Date.now() - 60000).toISOString()) // Last minute
+              .limit(1);
+
+            if (duplicateCheckError) {
+              console.error('❌ DUPLICATE CHECK ERROR:', duplicateCheckError);
+              addLog('Database Save', 'error', `Duplicate check failed for ${data.result_name}: ${duplicateCheckError.message}`);
+              continue;
+            }
+
+            if (existingRecords && existingRecords.length > 0) {
+              addLog('Database Save', 'warning', `⚠️ Skipping duplicate record: ${data.result_name}`);
+              continue;
+            }
+
             // Log the exact SQL operation being performed
             console.log('🔍 DATABASE INSERT QUERY:', {
               table: 'clinical_diagnostic_lab_tests',
@@ -238,15 +265,30 @@ const ComprehensiveMedicalProcessor: React.FC<ComprehensiveMedicalProcessorProps
             
             addLog('Database Save', 'info', `📊 Executing INSERT into clinical_diagnostic_lab_tests for ${data.result_name}`);
 
-            const { error: saveError } = await supabase
+            const { data: insertedData, error: saveError } = await supabase
               .from('clinical_diagnostic_lab_tests')
-              .insert(insertPayload);
+              .insert(insertPayload)
+              .select();
             
-            if (!saveError) {
+            console.log('🔍 INSERT RESULT:', {
+              success: !saveError,
+              error: saveError,
+              insertedData: insertedData,
+              rowsAffected: insertedData?.length || 0
+            });
+            
+            if (!saveError && insertedData && insertedData.length > 0) {
               savedCount++;
               addLog('Database Save', 'success', `✅ Saved lab result: ${data.result_name} = ${data.numeric_value || data.result_value} ${data.units || ''}`);
+              console.log('✅ SUCCESSFULLY INSERTED:', insertedData[0]);
             } else {
-              addLog('Database Save', 'error', `Failed to save ${data.result_name}: ${saveError.message}`);
+              const errorMsg = saveError?.message || 'Unknown error - no data returned';
+              addLog('Database Save', 'error', `❌ Failed to save ${data.result_name}: ${errorMsg}`);
+              console.error('❌ INSERT FAILED:', {
+                error: saveError,
+                payload: insertPayload,
+                patient_id: effectivePatientId
+              });
             }
           } catch (saveError: any) {
             addLog('Database Save', 'error', `Error saving lab result: ${saveError.message}`);
