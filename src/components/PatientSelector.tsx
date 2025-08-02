@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Users, Plus, UserPlus } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { usePatient } from '@/contexts/PatientContext';
 import { toast } from 'sonner';
 
 interface Patient {
@@ -29,6 +30,7 @@ const PatientSelector: React.FC<PatientSelectorProps> = ({
   onPatientSelect,
   showCreateButton = true
 }) => {
+  const { primaryPatient, setPrimaryPatient, createPatient: createPatientInContext } = usePatient();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -129,20 +131,33 @@ const PatientSelector: React.FC<PatientSelectorProps> = ({
           Patient Selection
         </CardTitle>
         <CardDescription>
-          Select a patient to view and manage their health data
+          Select a patient to view and manage their health data. 
+          Current primary patient: {primaryPatient ? `${primaryPatient.first_name} ${primaryPatient.last_name}` : 'None selected'}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex items-center gap-4">
           <div className="flex-1">
-            <Select value={selectedPatientId || ''} onValueChange={onPatientSelect}>
+            <Select 
+              value={selectedPatientId || primaryPatient?.id || ''} 
+              onValueChange={async (value) => {
+                // Update the global primary patient when selection changes
+                await setPrimaryPatient(value);
+                onPatientSelect(value);
+              }}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Select a patient..." />
               </SelectTrigger>
               <SelectContent>
                 {patients.map((patient) => (
                   <SelectItem key={patient.id} value={patient.id}>
-                    {getPatientDisplayName(patient)}
+                    <div className="flex items-center justify-between w-full">
+                      <span>{getPatientDisplayName(patient)}</span>
+                      {primaryPatient?.id === patient.id && (
+                        <span className="ml-2 text-xs text-primary">(Primary)</span>
+                      )}
+                    </div>
                   </SelectItem>
                 ))}
               </SelectContent>

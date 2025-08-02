@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { usePrimaryPatient } from '@/hooks/usePrimaryPatient';
+import { usePatient } from '@/contexts/PatientContext';
 import TestProcessor from './TestProcessor';
 
 interface ComprehensiveMedicalProcessorProps {
@@ -53,14 +53,23 @@ const ComprehensiveMedicalProcessor: React.FC<ComprehensiveMedicalProcessorProps
   patientId, 
   patientName = 'Selected Patient' 
 }) => {
-  const { primaryPatient } = usePrimaryPatient();
+  const { primaryPatient, loading: patientLoading } = usePatient();
   const [status, setStatus] = useState<ProcessingStatus | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // Use primary patient if no specific patient ID provided
+   // Determine which patient ID to use with proper validation
   const effectivePatientId = patientId || primaryPatient?.id;
   const effectivePatientName = patientName !== 'Selected Patient' ? patientName : 
-    (primaryPatient ? `${primaryPatient.first_name} ${primaryPatient.last_name}` : patientName);
+    (primaryPatient ? `${primaryPatient.first_name} ${primaryPatient.last_name}` : 'Unknown Patient');
+
+  console.log('🔍 PATIENT CONTEXT DETAILS:', {
+    providedPatientId: patientId,
+    providedPatientName: patientName,
+    primaryPatientFromContext: primaryPatient,
+    effectivePatientId: effectivePatientId,
+    effectivePatientName: effectivePatientName,
+    patientLoading: patientLoading
+  });
 
   const addLog = useCallback((step: string, status: ProcessingLog['status'], message: string, data?: any) => {
     const log: ProcessingLog = {
