@@ -199,29 +199,21 @@ const MedicalDataProcessor: React.FC = () => {
 
       console.log('Full AI response data:', data);
 
-      // Handle both old and new response formats
+      // Handle the response format
       const extractedFields = data.extractedFields || {};
-      const documentType = data.documentType || data.document_type || 'unknown';
-      const confidence = data.confidence || data.confidence_score || 0.0;
-      const recommendations = data.recommendations || [];
-      const uncertainData = data.uncertainData || data.uncertain_data || [];
-      const patientData = data.patientData || data.patient_data || {};
+      const documentType = data.documentType || 'unknown';
+      const confidence = data.confidence || 0.0;
 
       addLog('AI Processing', 'success', `AI analysis completed: ${documentType} (${Math.round(confidence * 100)}% confidence)`, {
         documentType,
         confidence,
-        fieldsExtracted: Object.keys(extractedFields).length,
-        uncertainDataPoints: uncertainData.length,
-        recommendations: recommendations.length
+        fieldsExtracted: Object.keys(extractedFields).length
       });
 
       return {
         documentType,
         confidence,
-        extractedFields,
-        recommendations,
-        uncertainData,
-        patientData
+        extractedFields
       };
     } catch (error: any) {
       console.error('AI Processing error:', error);
@@ -569,10 +561,7 @@ const MedicalDataProcessor: React.FC = () => {
         savedRecords,
         documentType: aiResult.documentType,
         confidence: aiResult.confidence,
-        extractedFields: aiResult.extractedFields,
-        recommendations: aiResult.recommendations,
-        uncertainData: aiResult.uncertainData,
-        patientData: aiResult.patientData
+        extractedFields: aiResult.extractedFields
       }));
 
       addLog('Processing', 'success', `Document processing completed successfully! ${savedRecords.length} records saved.`, {

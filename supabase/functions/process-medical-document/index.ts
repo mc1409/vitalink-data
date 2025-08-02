@@ -98,8 +98,7 @@ REQUIRED RESPONSE FORMAT:
   },
   "sqlQueries": [
     "INSERT INTO clinical_diagnostic_lab_tests (patient_id, test_name, test_category, test_type, numeric_value, result_value, unit, reference_range_min, reference_range_max, measurement_time, data_source) VALUES ('${patient_id}', 'Hemoglobin A1c', 'lab_work', 'blood_chemistry', 6.1, '6.1', '%', 5.7, 6.4, '${new Date().toISOString()}', 'document_upload');"
-  ],
-  "recommendations": []
+  ]
 }
 
 SQL GENERATION RULES:
@@ -266,9 +265,6 @@ Return the complete structured JSON response with confidence scoring and uncerta
       extractedFields: parsedResult.extractedFields || {},
       sqlQueries: Array.isArray(parsedResult.sqlQueries) 
         ? parsedResult.sqlQueries.slice(0, 20)
-        : [],
-      recommendations: Array.isArray(parsedResult.recommendations) 
-        ? parsedResult.recommendations.slice(0, 10)
         : []
     };
 
@@ -278,7 +274,6 @@ Return the complete structured JSON response with confidence scoring and uncerta
     console.log('🎯 Confidence:', result.confidence);
     console.log('📊 Extracted Fields Count:', Object.keys(result.extractedFields).length);
     console.log('🔍 SQL Queries Generated:', result.sqlQueries.length);
-    console.log('💡 Recommendations Count:', result.recommendations.length);
     console.log('📄 Full Result:', JSON.stringify(result, null, 2));
     console.log('⏰ PROCESSING COMPLETED:', new Date().toISOString());
 
@@ -294,7 +289,7 @@ Return the complete structured JSON response with confidence scoring and uncerta
       documentType: 'error',
       confidence: 0,
       extractedFields: {},
-      recommendations: ['Please check the document format and try again']
+      sqlQueries: []
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
