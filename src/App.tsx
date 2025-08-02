@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -11,19 +11,26 @@ import Dashboard from "./pages/Dashboard";
 import PatientDashboard from "./pages/PatientDashboard";
 import NotFound from "./pages/NotFound";
 
-const App = () => {
-  // Create QueryClient inside component to avoid hot reload issues
-  const [queryClient] = useState(() => new QueryClient({
-    defaultOptions: {
-      queries: {
-        retry: 3,
-        staleTime: 5 * 60 * 1000, // 5 minutes
-      },
-    },
-  }));
+// Create QueryClient with hot reload protection
+let queryClient: QueryClient;
 
+const getQueryClient = () => {
+  if (!queryClient) {
+    queryClient = new QueryClient({
+      defaultOptions: {
+        queries: {
+          retry: 3,
+          staleTime: 5 * 60 * 1000, // 5 minutes
+        },
+      },
+    });
+  }
+  return queryClient;
+};
+
+const App = () => {
   return (
-    <QueryClientProvider client={queryClient}>
+    <QueryClientProvider client={getQueryClient()}>
       <AuthProvider>
         <TooltipProvider>
           <Toaster />
