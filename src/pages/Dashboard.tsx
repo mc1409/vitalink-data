@@ -25,11 +25,12 @@ import { useAuth } from '@/components/AuthProvider';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import PatientSelector from '@/components/PatientSelector';
+import { usePatient } from '@/contexts/PatientContext';
 
 const Dashboard = () => {
   const { user, signOut, loading } = useAuth();
+  const { primaryPatient } = usePatient();
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
-  const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState(() => {
     // Check if URL has tab parameter
     const urlParams = new URLSearchParams(window.location.search);
@@ -114,8 +115,8 @@ const Dashboard = () => {
             <div className="flex items-center gap-4">
               <div className="w-80">
                 <PatientSelector
-                  selectedPatientId={selectedPatientId}
-                  onPatientSelect={setSelectedPatientId}
+                  selectedPatientId={primaryPatient?.id || null}
+                  onPatientSelect={() => {}} 
                   showCreateButton={true}
                 />
               </div>

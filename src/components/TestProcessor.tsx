@@ -3,10 +3,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { usePrimaryPatient } from '@/hooks/usePrimaryPatient';
+import { usePatient } from '@/contexts/PatientContext';
 
 const TestProcessor: React.FC = () => {
-  const { primaryPatient } = usePrimaryPatient();
+  const { primaryPatient } = usePatient();
   const [isProcessing, setIsProcessing] = useState(false);
   const [result, setResult] = useState<any>(null);
 
