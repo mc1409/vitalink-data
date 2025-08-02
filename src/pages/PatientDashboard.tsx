@@ -10,46 +10,12 @@ import PatientDocumentUpload from '@/components/PatientDocumentUpload';
 import ComprehensiveMedicalProcessor from '@/components/ComprehensiveMedicalProcessor';
 import DatabaseDashboard from '@/components/DatabaseDashboard';
 import SimpleTableViewer from '@/components/SimpleTableViewer';
-import { usePrimaryPatient } from '@/hooks/usePrimaryPatient';
+import { usePatient } from '@/contexts/PatientContext';
 
 const PatientDashboard = () => {
-  const { primaryPatient, loading: primaryPatientLoading } = usePrimaryPatient();
-  const [selectedPatientId, setSelectedPatientId] = useState<string>('');
-  const [selectedPatientName, setSelectedPatientName] = useState<string>('');
-
-  // Auto-select primary patient when available
-  useEffect(() => {
-    if (primaryPatient && !selectedPatientId) {
-      setSelectedPatientId(primaryPatient.id);
-      setSelectedPatientName(`${primaryPatient.first_name} ${primaryPatient.last_name}`);
-    }
-  }, [primaryPatient, selectedPatientId]);
-
-  // Fetch patient name when selection changes
-  useEffect(() => {
-    const fetchPatientName = async () => {
-      if (selectedPatientId && selectedPatientId !== primaryPatient?.id) {
-        try {
-          const { data, error } = await supabase
-            .from('patients')
-            .select('first_name, last_name')
-            .eq('id', selectedPatientId)
-            .single();
-
-          if (error) throw error;
-          
-          if (data) {
-            setSelectedPatientName(`${data.first_name} ${data.last_name}`);
-          }
-        } catch (error) {
-          console.error('Error fetching patient name:', error);
-          setSelectedPatientName('Unknown Patient');
-        }
-      }
-    };
-
-    fetchPatientName();
-  }, [selectedPatientId, primaryPatient]);
+  const { primaryPatient, loading: primaryPatientLoading } = usePatient();
+  
+  console.log('PatientDashboard - Current primary patient:', primaryPatient?.id, primaryPatient?.first_name, primaryPatient?.last_name);
 
   if (primaryPatientLoading) {
     return (
@@ -77,8 +43,8 @@ const PatientDashboard = () => {
 
       {/* Patient Selector */}
       <PatientSelector 
-        selectedPatientId={selectedPatientId}
-        onPatientSelect={(patientId) => setSelectedPatientId(patientId || '')}
+        selectedPatientId={primaryPatient?.id || null}
+        onPatientSelect={() => {}} 
       />
 
       {/* Main Dashboard Tabs */}
@@ -92,7 +58,7 @@ const PatientDashboard = () => {
         </TabsList>
         
         <TabsContent value="overview" className="space-y-6">
-          {selectedPatientId ? (
+          {primaryPatient?.id ? (
             <>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <Card>
@@ -135,7 +101,7 @@ const PatientDashboard = () => {
                 </Card>
               </div>
 
-              {primaryPatient && selectedPatientId === primaryPatient.id && (
+              {primaryPatient && (
                 <Card className="border-primary/20 bg-primary/5">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
@@ -180,8 +146,8 @@ const PatientDashboard = () => {
         </TabsContent>
 
         <TabsContent value="biomarkers" className="space-y-6">
-          {selectedPatientId ? (
-            <PatientBiomarkerDashboard patientId={selectedPatientId} />
+          {primaryPatient?.id ? (
+            <PatientBiomarkerDashboard patientId={primaryPatient.id} />
           ) : (
             <Card>
               <CardHeader>
@@ -193,8 +159,8 @@ const PatientDashboard = () => {
         </TabsContent>
 
         <TabsContent value="sync" className="space-y-6">
-          {selectedPatientId ? (
-            <HealthKitSyncPatientCentric patientId={selectedPatientId} />
+          {primaryPatient?.id ? (
+            <HealthKitSyncPatientCentric patientId={primaryPatient.id} />
           ) : (
             <Card>
               <CardHeader>
@@ -208,12 +174,12 @@ const PatientDashboard = () => {
         <TabsContent value="upload" className="space-y-6">
           <div className="space-y-6">
             <ComprehensiveMedicalProcessor 
-              patientId={selectedPatientId}
-              patientName={selectedPatientName || undefined}
+              patientId={primaryPatient?.id || ''}
+              patientName={primaryPatient ? `${primaryPatient.first_name} ${primaryPatient.last_name}` : undefined}
             />
             <PatientDocumentUpload 
-              patientId={selectedPatientId || ''} 
-              patientName={selectedPatientName || undefined}
+              patientId={primaryPatient?.id || ''} 
+              patientName={primaryPatient ? `${primaryPatient.first_name} ${primaryPatient.last_name}` : undefined}
             />
           </div>
         </TabsContent>

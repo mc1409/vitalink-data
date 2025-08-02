@@ -45,6 +45,7 @@ interface PlatformInfo {
 }
 
 const HealthKitSyncPatientCentric: React.FC<HealthKitSyncPatientCentricProps> = ({ patientId }) => {
+  console.log('HealthKitSyncPatientCentric - Received patient ID:', patientId);
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);

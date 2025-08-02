@@ -57,6 +57,9 @@ const ComprehensiveMedicalProcessor: React.FC<ComprehensiveMedicalProcessorProps
   const [status, setStatus] = useState<ProcessingStatus | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
+  console.log('ComprehensiveMedicalProcessor - Props patient ID:', patientId);
+  console.log('ComprehensiveMedicalProcessor - Global primary patient ID:', primaryPatient?.id);
+
    // Determine which patient ID to use with proper validation
   const effectivePatientId = patientId || primaryPatient?.id;
   const effectivePatientName = patientName !== 'Selected Patient' ? patientName : 

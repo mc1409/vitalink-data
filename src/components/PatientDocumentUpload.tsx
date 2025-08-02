@@ -35,6 +35,7 @@ const PatientDocumentUpload: React.FC<PatientDocumentUploadProps> = ({
   patientId, 
   patientName = 'Selected Patient' 
 }) => {
+  console.log('PatientDocumentUpload - Received patient ID:', patientId);
   const [uploadStatus, setUploadStatus] = useState<UploadStatus | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 

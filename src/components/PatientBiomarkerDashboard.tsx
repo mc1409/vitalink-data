@@ -27,6 +27,7 @@ interface PatientStats {
 }
 
 const PatientBiomarkerDashboard: React.FC<PatientBiomarkerDashboardProps> = ({ patientId }) => {
+  console.log('PatientBiomarkerDashboard - Received patient ID:', patientId);
   const [biomarkerData, setBiomarkerData] = useState<BiomarkerData[]>([]);
   const [patientStats, setPatientStats] = useState<PatientStats>({
     totalBiomarkerRecords: 0,
