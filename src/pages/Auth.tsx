@@ -60,23 +60,22 @@ const Auth = () => {
       setIsLoading(true);
 
       try {
-        // Create the account first
-        const { error: authError } = await signUp(email, password, displayName);
+        // Create the account with patient information
+        const patientInfo = {
+          firstName,
+          lastName,
+          dateOfBirth,
+          gender
+        };
+
+        const { error: authError } = await signUp(email, password, displayName, patientInfo);
         
         if (authError) {
           throw authError;
         }
 
-        // Account creation successful - we'll create patient info in the auth trigger
-        // Store patient info in localStorage temporarily for the trigger to access
-        localStorage.setItem('pendingPatientInfo', JSON.stringify({
-          firstName,
-          lastName,
-          dateOfBirth,
-          gender
-        }));
-
-        toast.success('Account created successfully! Your patient profile will be set up automatically.');
+        // Account creation successful - patient info automatically created by trigger
+        toast.success('Account and patient profile created successfully!');
         
         // Reset form
         setCurrentStep(1);
