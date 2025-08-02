@@ -13,7 +13,8 @@ serve(async (req) => {
   }
 
   try {
-    const { text, extractedText, filename, patient_id } = await req.json();
+    const req_body = await req.json();
+    const { text, extractedText, filename, patient_id, documentType } = req_body;
     
     // Accept either 'text' or 'extractedText' parameter
     const documentText = text || extractedText;
@@ -141,7 +142,90 @@ biomarker_sleep:
 - sleep_efficiency (numeric, optional)
 `;
 
-    const systemPrompt = `You are a medical document processor that extracts structured data from medical documents and maps it to database schema.
+    // Determine document type and create appropriate system prompt
+    let systemPrompt = '';
+    
+    if (documentType === 'biomarker') {
+      systemPrompt = `You are a biomarker data extraction AI. Extract structured data from fitness trackers, health apps, and biomarker documents. Return data in the exact JSON format specified below.
+
+IMPORTANT INSTRUCTIONS:
+1. Extract ALL relevant biomarker data from the document
+2. Return data in the exact JSON structure specified below
+3. Use null for missing values, not empty strings
+4. Ensure all dates are in YYYY-MM-DD format
+5. Ensure all timestamps are in ISO 8601 format (YYYY-MM-DDTHH:MM:SS.000Z)
+6. For numeric values, use actual numbers, not strings
+7. Generate appropriate INSERT SQL statements for the extracted data
+8. Detect the biomarker category and route data to appropriate tables
+
+BIOMARKER DATABASE SCHEMAS:
+
+Table: biomarker_heart
+- patient_id: UUID, measurement_time: timestamp, data_source: text, device_type: text
+- resting_heart_rate: integer, average_heart_rate: integer, min_heart_rate: integer, max_heart_rate: integer
+- walking_heart_rate: integer, workout_heart_rate: integer, recovery_heart_rate: integer
+- hrv_rmssd: numeric, hrv_sdnn: numeric, hrv_score: integer
+- systolic_bp: integer, diastolic_bp: integer, vo2_max: numeric
+- cardio_fitness_level: text, ecg_rhythm_classification: text
+- afib_detected: boolean, irregular_rhythm_detected: boolean
+
+Table: biomarker_activity
+- patient_id: UUID, measurement_date: date, measurement_time: timestamp, data_source: text, device_type: text
+- steps_count: integer, distance_walked_meters: numeric, distance_ran_meters: numeric, distance_cycled_meters: numeric
+- flights_climbed: integer, total_calories: integer, active_calories: integer, basal_calories: integer
+- workout_calories: integer, exercise_minutes: integer, vigorous_activity_minutes: integer
+- moderate_activity_minutes: integer, sedentary_minutes: integer, stand_hours: integer, stand_goal_hours: integer
+- workout_duration_minutes: integer, workout_distance_meters: numeric, workout_avg_heart_rate: integer, workout_max_heart_rate: integer
+
+Table: biomarker_sleep
+- patient_id: UUID, sleep_date: date, measurement_time: timestamp, data_source: text, device_type: text
+- bedtime: timestamp, sleep_start: timestamp, sleep_end: timestamp, wake_time: timestamp
+- total_sleep_time: integer, time_in_bed: integer, rem_sleep_minutes: integer, deep_sleep_minutes: integer
+- light_sleep_minutes: integer, awake_minutes: integer, sleep_efficiency: numeric, sleep_latency: integer
+- sleep_score: integer, sleep_debt: integer, sleep_disturbances: integer, restfulness_score: integer
+- avg_heart_rate: integer, min_heart_rate: integer, max_heart_rate: integer, avg_hrv: numeric
+- avg_respiratory_rate: numeric, avg_spo2: integer, min_spo2: integer
+- avg_body_temperature: numeric, temperature_deviation: numeric
+
+Table: biomarker_nutrition
+- patient_id: UUID, measurement_date: date, measurement_time: timestamp, data_source: text
+- total_calories: integer, carbohydrates_grams: numeric, protein_grams: numeric, fat_grams: numeric
+- fiber_grams: numeric, sugar_grams: numeric, added_sugar_grams: numeric, sodium_mg: numeric
+- potassium_mg: numeric, calcium_mg: numeric, magnesium_mg: numeric, iron_mg: numeric, zinc_mg: numeric
+- vitamin_a_iu: numeric, vitamin_c_mg: numeric, vitamin_d_iu: numeric, vitamin_e_mg: numeric
+- vitamin_k_mcg: numeric, thiamine_mg: numeric, riboflavin_mg: numeric, niacin_mg: numeric
+- vitamin_b6_mg: numeric, folate_mcg: numeric, vitamin_b12_mcg: numeric, biotin_mcg: numeric
+- water_intake_ml: integer, caffeine_mg: numeric, alcohol_grams: numeric
+
+Table: biomarker_biological_genetic_microbiome
+- patient_id: UUID, test_date: date, measurement_time: timestamp, data_source: text, test_provider: text
+- alpha_diversity: numeric, beta_diversity: numeric, species_richness: integer, microbial_diversity_shannon: numeric
+- dysbiosis_index: numeric, firmicutes_bacteroidetes_ratio: numeric, beneficial_bacteria_score: integer
+- pathogenic_bacteria_score: integer, bifidobacterium_level: numeric, lactobacillus_level: numeric
+- akkermansia_level: numeric, proteobacteria_level: numeric, candida_level: numeric
+- acetate_production: numeric, butyrate_production: numeric, propionate_production: numeric
+- vitamin_b_production: integer, vitamin_k_production: integer, folate_production: integer
+- fiber_utilization_score: integer, protein_utilization_score: integer, carb_utilization_score: integer
+- fat_utilization_score: integer, immune_function_score: integer, mitochondrial_health_score: integer
+- oxidative_stress_score: integer, inflammatory_pathways_score: integer, recovery_score: integer
+- strain_score: numeric, hrv_score: integer, resting_hr_score: integer, sleep_performance_score: integer
+- stress_score: integer, cardiovascular_load: integer, hydration_level: integer, microbiome_age: numeric
+
+Return response as JSON with this structure:
+{
+  "documentType": "biomarker_data",
+  "confidence": 0.95,
+  "extractedFields": {
+    "biomarker_heart": [...],
+    "biomarker_activity": [...],
+    "biomarker_sleep": [...],
+    "biomarker_nutrition": [...],
+    "biomarker_biological_genetic_microbiome": [...]
+  },
+  "sqlQuery": "INSERT INTO biomarker_heart (...) VALUES (...); INSERT INTO biomarker_activity (...) VALUES (...);"
+}`;
+    } else {
+      systemPrompt = `You are a medical document processor that extracts structured data from medical documents and maps it to database schema.
 
 Database Schema:
 ${databaseSchema}
@@ -184,6 +268,7 @@ Response format:
     ]
   }
 }`;
+    }
 
     const userPrompt = `Analyze this medical document and extract structured data according to the medical data extraction protocol:
 

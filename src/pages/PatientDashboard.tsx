@@ -7,6 +7,7 @@ import PatientSelector from '@/components/PatientSelector';
 import PatientBiomarkerDashboard from '@/components/PatientBiomarkerDashboard';
 import HealthKitSyncPatientCentric from '@/components/HealthKitSyncPatientCentric';
 import PatientDocumentUpload from '@/components/PatientDocumentUpload';
+import { PatientBiomarkerUpload } from '@/components/PatientBiomarkerUpload';
 import ComprehensiveMedicalProcessor from '@/components/ComprehensiveMedicalProcessor';
 import DatabaseDashboard from '@/components/DatabaseDashboard';
 import SimpleTableViewer from '@/components/SimpleTableViewer';
@@ -49,11 +50,12 @@ const PatientDashboard = () => {
 
       {/* Main Dashboard Tabs */}
       <Tabs defaultValue="overview" className="w-full">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="biomarkers">Biomarkers</TabsTrigger>
           <TabsTrigger value="sync">Data Sync</TabsTrigger>
           <TabsTrigger value="upload">Upload</TabsTrigger>
+          <TabsTrigger value="biomarker-upload">Biomarker Upload</TabsTrigger>
           <TabsTrigger value="database">Database</TabsTrigger>
         </TabsList>
         
@@ -182,6 +184,22 @@ const PatientDashboard = () => {
               patientName={primaryPatient ? `${primaryPatient.first_name} ${primaryPatient.last_name}` : undefined}
             />
           </div>
+        </TabsContent>
+
+        <TabsContent value="biomarker-upload" className="space-y-6">
+          {primaryPatient ? (
+            <PatientBiomarkerUpload 
+              patientId={primaryPatient.id} 
+              patientName={`${primaryPatient.first_name} ${primaryPatient.last_name}`}
+            />
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle>Biomarker Data Upload</CardTitle>
+                <CardDescription>Please select a patient to upload biomarker data</CardDescription>
+              </CardHeader>
+            </Card>
+          )}
         </TabsContent>
 
         <TabsContent value="database" className="space-y-6">
