@@ -200,9 +200,24 @@ const ComprehensiveMedicalProcessor: React.FC<ComprehensiveMedicalProcessorProps
       addLog('Database Save', 'processing', 'Saving extracted data to clinical database...');
       
       let savedCount = 0;
+      
+      console.log('🔍 STARTING DATABASE SAVE PROCESS:', {
+        extractedFields: extractedFields,
+        extractedFieldsKeys: Object.keys(extractedFields),
+        effectivePatientId: effectivePatientId,
+        totalFieldsToProcess: Object.keys(extractedFields).length
+      });
 
       // Save lab results to clinical_diagnostic_lab_tests table
       for (const [key, labData] of Object.entries(extractedFields)) {
+        console.log(`🔍 PROCESSING FIELD: ${key}`, {
+          key: key,
+          labData: labData,
+          startsWithLabResults: key.startsWith('LAB_RESULTS'),
+          isObject: typeof labData === 'object',
+          isValid: key.startsWith('LAB_RESULTS') && labData && typeof labData === 'object'
+        });
+        
         if (key.startsWith('LAB_RESULTS') && labData && typeof labData === 'object') {
           try {
             const data = labData as any;
