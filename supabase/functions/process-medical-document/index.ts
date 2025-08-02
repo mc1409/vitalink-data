@@ -51,15 +51,64 @@ Database Schema for Medical Data Extraction:
 clinical_diagnostic_lab_tests:
 - patient_id (uuid, required)
 - test_name (text, required) 
-- test_category (text, required)
-- test_type (text, required)
-- numeric_value (numeric, optional)
-- result_value (text, optional)
-- unit (text, optional)
+- test_category (text, required) - Categories: "Liver Function Test", "Kidney Function Test", "Electrolytes", "Lipid Profile", "Glucose/Diabetes", "Vitamins", "Thyroid Profile", "Iron Studies", "Cardiac Risk", "Enzymes", "Hemogram/CBC", "Differential Leucocyte Count", "Absolute Leucocyte Count", "Urine Physical", "Urine Chemical", "Urine Microscopy", "ESR", "Coagulation", "Tumor Markers", "Hormones"
+- test_type (text, required) - Types: "Biochemistry", "Hematology", "Urine Analysis", "Immunology", "Serology", "Microbiology", "Molecular", "Cytology", "Histopathology"
+- numeric_value (numeric, optional) - For quantitative results
+- result_value (text, optional) - For qualitative results (e.g., "Negative", "Positive", "Pale yellow")
+- unit (text, optional) - Units: "mg/dL", "g/dL", "U/L", "IU/L", "mEq/L", "mmol/L", "µg/dL", "pg/mL", "nmol/L", "ng/mL", "µIU/mL", "mill/mm3", "thou/mm3", "fL", "pg", "%", "mm/hr", "RBC/HPF", "WBC/HPF", "Epi cells/hpf", "/Lpf"
 - reference_range_min (numeric, optional)
 - reference_range_max (numeric, optional)
 - measurement_time (timestamp, required)
 - data_source (text, required)
+
+COMPREHENSIVE LAB TEST CATEGORIES TO EXTRACT:
+
+1. LIVER & KIDNEY PANEL:
+   - Creatinine, GFR Estimated, Urea, Urea Nitrogen Blood, Uric Acid
+   - AST (SGOT), ALT (SGPT), GGTP, Alkaline Phosphatase (ALP)
+   - Bilirubin (Total, Direct, Indirect), Total Protein, Albumin, A:G Ratio, Globulin
+   - Calcium Total, Phosphorus
+
+2. ELECTROLYTES:
+   - Sodium, Potassium, Chloride
+
+3. LIPID PROFILE:
+   - Cholesterol Total, Triglycerides, HDL, LDL, VLDL, Non-HDL Cholesterol
+
+4. GLUCOSE & DIABETES:
+   - Glucose Fasting, HbA1c, Estimated average glucose (eAG)
+
+5. VITAMINS:
+   - Vitamin B12, Vitamin D 25-Hydroxy
+
+6. THYROID PROFILE:
+   - T3 Total, T4 Total, TSH
+
+7. IRON STUDIES:
+   - Iron, TIBC, Transferrin Saturation
+
+8. CARDIAC RISK:
+   - C-Reactive Protein (hsCRP), Apolipoprotein A1, Apolipoprotein B, Apo B/A1 Ratio
+
+9. ENZYMES:
+   - Amylase, Lipase
+
+10. HEMOGRAM/CBC (Complete Blood Count):
+    - Hemoglobin, Packed Cell Volume (PCV), RBC Count
+    - MCV, MCH, MCHC, Red Cell Distribution Width (RDW)
+    - Total Leukocyte Count (TLC), Platelet Count, Mean Platelet Volume
+    - E.S.R. (Erythrocyte Sedimentation Rate)
+
+11. DIFFERENTIAL LEUCOCYTE COUNT:
+    - Segmented Neutrophils, Lymphocytes, Monocytes, Eosinophils, Basophils (all in %)
+
+12. ABSOLUTE LEUCOCYTE COUNT:
+    - Neutrophils, Lymphocytes, Monocytes, Eosinophils, Basophils (all in thou/mm3)
+
+13. URINE EXAMINATION:
+    Physical: Colour, Specific Gravity, pH
+    Chemical: Proteins, Glucose, Ketones, Bilirubin, Urobilinogen, Leucocyte Esterase, Nitrite
+    Microscopy: R.B.C., Pus Cells, Epithelial Cells, Casts, Crystals, Others
 
 biomarker_heart:
 - patient_id (uuid, required)
@@ -104,15 +153,19 @@ Your task is to:
 4. Provide confidence scores and validation flags
 
 IMPORTANT EXTRACTION RULES:
-- Only extract data that is explicitly mentioned in the document
-- Do not infer or assume values that are not clearly stated
-- For lab test results, ensure you extract the test name, value, unit, and reference ranges if available
+- Extract ALL lab test results mentioned in the document - do not skip any tests
+- Include BIOCHEMISTRY tests (liver, kidney, electrolytes, lipids, glucose, vitamins, thyroid, cardiac, enzymes)
+- Include HEMATOLOGY tests (CBC, hemoglobin, WBC, RBC, platelets, differential counts, ESR)
+- Include URINE ANALYSIS tests (physical, chemical, microscopy parameters)
+- Extract both numeric values (for quantitative tests) and text results (for qualitative tests)
+- For each test, extract: test_name, category, type, value, unit, reference ranges
+- Map test categories correctly: "Hemogram/CBC", "Differential Leucocyte Count", "Urine Physical", etc.
+- Map test types correctly: "Biochemistry", "Hematology", "Urine Analysis"
 - For dates, convert them to ISO format (YYYY-MM-DD)
 - For timestamps, use ISO format with timezone (YYYY-MM-DDTHH:MM:SSZ)
-- Map extracted data to the correct database table based on the type of information
-- Ensure all extracted values match the expected data types for each field
-- Use the provided patient_id in all extracted records
+- Use the provided patient_id in ALL extracted records
 - Include confidence scores for each extracted field (0-100)
+- Flag out-of-range values in _validation_flags array
 
 Response format:
 {
