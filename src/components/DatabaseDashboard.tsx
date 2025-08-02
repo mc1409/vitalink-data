@@ -31,21 +31,10 @@ const DatabaseDashboard = () => {
   const [refreshing, setRefreshing] = useState(false);
 
   const tableCategories = {
-    'Medical Records': {
-      tables: ['patients', 'lab_tests', 'lab_results', 'imaging_studies', 'cardiovascular_tests', 'allergies'],
-      icon: Heart,
-      color: 'text-primary'
-    },
-    'Biomarker Data': {
-      tables: ['activity_metrics', 'heart_metrics', 'sleep_metrics', 'nutrition_metrics', 'microbiome_metrics', 'recovery_strain_metrics', 'environmental_metrics'],
-      icon: Activity,
-      color: 'text-accent'
-    },
-    'System': {
-      tables: ['profiles', 'device_integrations', 'document_processing_logs'],
-      icon: Database,
-      color: 'text-info'
-    }
+    'Core User Management': { color: 'blue', icon: '👤' },
+    'Biomarker Data': { color: 'green', icon: '📊' },
+    'Clinical Diagnostics': { color: 'red', icon: '🏥' },
+    'System Management': { color: 'gray', icon: '⚙️' }
   };
 
   const getTableInfo = async () => {
