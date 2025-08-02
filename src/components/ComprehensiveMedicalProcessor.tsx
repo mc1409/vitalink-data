@@ -46,6 +46,7 @@ interface ProcessingStatus {
   extractedCount?: number;
   savedCount?: number;
   logs: ProcessingLog[];
+  sqlQueries?: string[]; // Add SQL queries tracking
 }
 
 const ComprehensiveMedicalProcessor: React.FC<ComprehensiveMedicalProcessorProps> = ({ 
@@ -74,6 +75,13 @@ const ComprehensiveMedicalProcessor: React.FC<ComprehensiveMedicalProcessorProps
     setStatus(prev => prev ? {
       ...prev,
       logs: [log, ...prev.logs]
+    } : null);
+  }, []);
+
+  const addSqlQuery = useCallback((query: string) => {
+    setStatus(prev => prev ? {
+      ...prev,
+      sqlQueries: [...(prev.sqlQueries || []), query]
     } : null);
   }, []);
 
@@ -115,7 +123,8 @@ const ComprehensiveMedicalProcessor: React.FC<ComprehensiveMedicalProcessorProps
       progress: 0,
       logs: [],
       extractedCount: 0,
-      savedCount: 0
+      savedCount: 0,
+      sqlQueries: [] // Initialize SQL queries array
     });
 
     try {
@@ -279,12 +288,34 @@ const ComprehensiveMedicalProcessor: React.FC<ComprehensiveMedicalProcessorProps
               continue;
             }
 
+            // Generate and capture the exact SQL query being executed
+            const sqlQuery = `INSERT INTO clinical_diagnostic_lab_tests (
+  patient_id, test_name, test_category, test_type, 
+  numeric_value, result_value, unit, reference_range_min, 
+  reference_range_max, measurement_time, data_source
+) VALUES (
+  '${effectivePatientId}',
+  '${data.test_name}',
+  'lab_work', 
+  'blood_chemistry',
+  ${data.numeric_value || 'NULL'},
+  '${data.result_value || data.numeric_value?.toString() || ''}',
+  '${data.unit || ''}',
+  ${data.reference_range_min || 'NULL'},
+  ${data.reference_range_max || 'NULL'},
+  '${new Date().toISOString()}',
+  'document_upload'
+);`;
+
+            // Add SQL query to the tracking array
+            addSqlQuery(sqlQuery);
+            
             // Log the exact SQL operation being performed
             console.log('🔍 DATABASE INSERT QUERY:', {
               table: 'clinical_diagnostic_lab_tests',
               operation: 'INSERT',
               payload: insertPayload,
-              sqlEquivalent: `INSERT INTO clinical_diagnostic_lab_tests (patient_id, test_name, test_category, test_type, numeric_value, result_value, unit, reference_range_min, reference_range_max, measurement_time, data_source) VALUES ('${effectivePatientId}', '${data.test_name}', 'lab_work', 'blood_chemistry', ${data.numeric_value}, '${data.result_value || data.numeric_value?.toString()}', '${data.unit}', ${data.reference_range_min}, ${data.reference_range_max}, '${new Date().toISOString()}', 'document_upload')`
+              sqlEquivalent: sqlQuery.replace(/\n/g, ' ').replace(/\s+/g, ' ')
             });
             
             addLog('Database Save', 'info', `📊 Executing INSERT into clinical_diagnostic_lab_tests for ${data.test_name}`);
@@ -546,6 +577,77 @@ const ComprehensiveMedicalProcessor: React.FC<ComprehensiveMedicalProcessorProps
                     ))}
                   </div>
                 </ScrollArea>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Data Mapping and SQL Queries Tabs */}
+          {status && (status.logs.length > 0 || (status.sqlQueries && status.sqlQueries.length > 0)) && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">Data Mapping & SQL Queries</CardTitle>
+                <CardDescription className="text-xs">
+                  View raw extracted data and SQL queries executed during processing
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Tabs defaultValue="extracted" className="w-full">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="extracted">Raw Extracted Data</TabsTrigger>
+                    <TabsTrigger value="sql">SQL Queries</TabsTrigger>
+                  </TabsList>
+                  
+                  <TabsContent value="extracted" className="mt-4">
+                    <ScrollArea className="h-64">
+                      <div className="space-y-2">
+                        {status.logs
+                          .filter(log => log.data)
+                          .map((log) => (
+                            <div key={log.id} className="p-2 bg-muted rounded text-xs">
+                              <div className="font-semibold mb-1">{log.step}</div>
+                              <pre className="whitespace-pre-wrap font-mono text-xs">
+                                {JSON.stringify(log.data, null, 2)}
+                              </pre>
+                            </div>
+                          ))}
+                        {status.logs.filter(log => log.data).length === 0 && (
+                          <div className="text-xs text-muted-foreground text-center py-8">
+                            No extracted data available
+                          </div>
+                        )}
+                      </div>
+                    </ScrollArea>
+                  </TabsContent>
+                  
+                  <TabsContent value="sql" className="mt-4">
+                    <ScrollArea className="h-64">
+                      <div className="space-y-3">
+                        {status.sqlQueries && status.sqlQueries.length > 0 ? (
+                          status.sqlQueries.map((query, index) => (
+                            <div key={index} className="space-y-2">
+                              <div className="flex items-center gap-2">
+                                <Database className="h-4 w-4 text-blue-600" />
+                                <span className="text-xs font-semibold">
+                                  SQL Query #{index + 1}
+                                </span>
+                                <Badge variant="outline" className="text-xs">
+                                  Patient ID: {effectivePatientId}
+                                </Badge>
+                              </div>
+                              <div className="p-3 bg-slate-900 text-green-400 rounded font-mono text-xs overflow-x-auto">
+                                <pre className="whitespace-pre-wrap">{query}</pre>
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="text-xs text-muted-foreground text-center py-8">
+                            No SQL queries executed yet
+                          </div>
+                        )}
+                      </div>
+                    </ScrollArea>
+                  </TabsContent>
+                </Tabs>
               </CardContent>
             </Card>
           )}
