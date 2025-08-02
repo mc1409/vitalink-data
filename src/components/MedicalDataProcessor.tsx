@@ -335,7 +335,9 @@ const MedicalDataProcessor: React.FC = () => {
             savedRecords.push({
               table: insertResult.table,
               id: record.id,
-              record: record
+              record: record,
+              data: record, // Add data property for backward compatibility
+              confidence: 0.95 // Default confidence for DatabaseMapper results
             });
           }
         }
@@ -1111,9 +1113,9 @@ const MedicalDataProcessor: React.FC = () => {
                                  <CardTitle className="text-sm font-medium">
                                    📊 {record.table.replace(/_/g, ' ').toUpperCase()}
                                  </CardTitle>
-                                 <Badge variant="outline" className="text-xs">
-                                   ID: {record.data.id || 'N/A'}
-                                 </Badge>
+                                  <Badge variant="outline" className="text-xs">
+                                    ID: {record.id || record.data?.id || 'N/A'}
+                                  </Badge>
                                </div>
                              </CardHeader>
                              <CardContent className="space-y-2">
