@@ -75,17 +75,21 @@ const HealthKitSyncPatientCentric: React.FC<HealthKitSyncPatientCentricProps> = 
 
     // Check connection status from device_integrations table
     if (patientId) {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('device_integrations')
         .select('last_sync_timestamp, authentication_status')
         .eq('patient_id', patientId)
         .eq('device_type', 'healthkit')
         .eq('is_active', true)
-        .single();
+        .maybeSingle(); // Use maybeSingle instead of single to handle no records
 
-      if (data) {
+      if (data && !error) {
         setIsConnected(data.authentication_status === 'connected');
         setLastSyncTime(data.last_sync_timestamp);
+      } else {
+        // No existing integration record found
+        setIsConnected(false);
+        setLastSyncTime(null);
       }
     }
   };

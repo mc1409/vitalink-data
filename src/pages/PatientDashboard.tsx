@@ -6,6 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 import PatientSelector from '@/components/PatientSelector';
 import PatientBiomarkerDashboard from '@/components/PatientBiomarkerDashboard';
 import HealthKitSyncPatientCentric from '@/components/HealthKitSyncPatientCentric';
+import HealthKitIntegration from '@/components/HealthKitIntegration';
 import PatientDocumentUpload from '@/components/PatientDocumentUpload';
 import { PatientBiomarkerUpload } from '@/components/PatientBiomarkerUpload';
 import ComprehensiveMedicalProcessor from '@/components/ComprehensiveMedicalProcessor';
@@ -162,12 +163,12 @@ const PatientDashboard = () => {
 
         <TabsContent value="sync" className="space-y-6">
           {primaryPatient?.id ? (
-            <HealthKitSyncPatientCentric patientId={primaryPatient.id} />
+            <HealthKitIntegration patientId={primaryPatient.id} />
           ) : (
             <Card>
               <CardHeader>
-                <CardTitle>Data Sync</CardTitle>
-                <CardDescription>Please select a patient to configure data synchronization</CardDescription>
+                <CardTitle>HealthKit Integration</CardTitle>
+                <CardDescription>Please select a patient to configure HealthKit sync with biomarker tables</CardDescription>
               </CardHeader>
             </Card>
           )}
