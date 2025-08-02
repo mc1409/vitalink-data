@@ -228,37 +228,32 @@ const ComprehensiveMedicalProcessor: React.FC<ComprehensiveMedicalProcessorProps
         effectivePatientId: effectivePatientId
       });
 
-      // Execute each LLM-generated SQL query
+      // Execute each LLM-generated SQL query (now with real patient IDs)
       for (let i = 0; i < sqlQueries.length; i++) {
         const sqlQuery = sqlQueries[i];
         try {
-          // Replace placeholders with actual values
-          const processedSqlQuery = sqlQuery
-            .replace(/PATIENT_ID_PLACEHOLDER/g, effectivePatientId)
-            .replace(/CURRENT_TIMESTAMP_PLACEHOLDER/g, new Date().toISOString());
-
           console.log(`🔍 EXECUTING SQL QUERY ${i + 1}/${sqlQueries.length}:`, {
             originalQuery: sqlQuery,
-            processedQuery: processedSqlQuery,
-            patientId: effectivePatientId
+            patientId: effectivePatientId,
+            containsRealPatientId: sqlQuery.includes(effectivePatientId)
           });
 
-          // Add processed SQL query to tracking
-          addSqlQuery(processedSqlQuery);
+          // Add SQL query to tracking (now contains real patient ID)
+          addSqlQuery(sqlQuery);
 
           // Validate query is an INSERT statement for security
-          if (!processedSqlQuery.trim().toLowerCase().startsWith('insert')) {
-            addLog('Database Save', 'error', `Skipping non-INSERT query: ${processedSqlQuery.substring(0, 50)}...`);
+          if (!sqlQuery.trim().toLowerCase().startsWith('insert')) {
+            addLog('Database Save', 'error', `Skipping non-INSERT query: ${sqlQuery.substring(0, 50)}...`);
             continue;
           }
 
           // Extract table name for duplicate checking
-          const tableMatch = processedSqlQuery.match(/INSERT INTO\s+(\w+)/i);
+          const tableMatch = sqlQuery.match(/INSERT INTO\s+(\w+)/i);
           const tableName = tableMatch ? tableMatch[1] : 'unknown';
 
           // For clinical_diagnostic_lab_tests, check for duplicates
           if (tableName === 'clinical_diagnostic_lab_tests') {
-            const testNameMatch = processedSqlQuery.match(/'([^']+)',.*'lab_work'/);
+            const testNameMatch = sqlQuery.match(/'([^']+)',.*'lab_work'/);
             const testName = testNameMatch ? testNameMatch[1] : null;
 
             if (testName) {
@@ -288,10 +283,9 @@ const ComprehensiveMedicalProcessor: React.FC<ComprehensiveMedicalProcessorProps
             .rpc('execute_sql', { query_text: `SELECT 1 as executed` }); // For safety, we'll use client methods instead
 
           // Since we can't execute raw SQL for security, we'll parse and use client methods
-          // This is a simplified approach - in production, you'd want more sophisticated SQL parsing
+          // Extract values from the SQL query for client insertion
           if (tableName === 'clinical_diagnostic_lab_tests') {
-            // Extract values from the SQL query for client insertion
-            const values = processedSqlQuery.match(/VALUES\s*\((.*)\)/i);
+            const values = sqlQuery.match(/VALUES\s*\((.*)\)/i);
             if (values) {
               const valueString = values[1];
               // Parse the values (simplified - would need more robust parsing in production)

@@ -13,7 +13,7 @@ serve(async (req) => {
   }
 
   try {
-    const { text, extractedText, filename } = await req.json();
+    const { text, extractedText, filename, patient_id } = await req.json();
     
     // Accept either 'text' or 'extractedText' parameter
     const documentText = text || extractedText;
@@ -21,6 +21,7 @@ serve(async (req) => {
     console.log('🤖 AZURE OPENAI REQUEST INITIATED:');
     console.log('=====================================');
     console.log('📄 FILENAME:', filename);
+    console.log('👤 PATIENT ID:', patient_id);
     console.log('📝 TEXT LENGTH:', documentText?.length || 0);
     console.log('📊 TEXT PREVIEW:', documentText?.substring(0, 500) + '...');
     console.log('⏰ REQUEST TIMESTAMP:', new Date().toISOString());
@@ -47,13 +48,13 @@ serve(async (req) => {
     // Enhanced medical data extraction prompt with SQL generation
     const systemPrompt = `You are a medical data extraction specialist and SQL query generator. Your job is to:
 1. Extract structured data from medical documents according to the database schema
-2. Generate complete SQL INSERT statements for the extracted data
+2. Generate complete SQL INSERT statements for the extracted data using the provided patient ID
 
 DATABASE SCHEMA FOR SQL GENERATION:
 
 clinical_diagnostic_lab_tests table (for LAB_RESULTS):
 - id (uuid, auto-generated)
-- patient_id (uuid, will be provided as PATIENT_ID_PLACEHOLDER)
+- patient_id (uuid, use the provided patient_id: ${patient_id})
 - test_name (text, required)
 - test_category (text, default: 'lab_work') 
 - test_type (text, default: 'blood_chemistry')
@@ -62,15 +63,15 @@ clinical_diagnostic_lab_tests table (for LAB_RESULTS):
 - unit (text, nullable)
 - reference_range_min (numeric, nullable)
 - reference_range_max (numeric, nullable)
-- measurement_time (timestamp, will use current time)
+- measurement_time (timestamp, use current timestamp)
 - data_source (text, default: 'document_upload')
 - created_at (timestamp, auto-generated)
 - updated_at (timestamp, auto-generated)
 
 biomarker_heart table (for HEART_METRICS):
 - id (uuid, auto-generated)
-- patient_id (uuid, will be provided as PATIENT_ID_PLACEHOLDER)
-- measurement_time (timestamp, will use current time)
+- patient_id (uuid, use the provided patient_id: ${patient_id})
+- measurement_time (timestamp, use current timestamp)
 - device_type (text, default: 'manual')
 - data_source (text, default: 'document_upload')
 - resting_heart_rate (integer, nullable)
@@ -78,20 +79,6 @@ biomarker_heart table (for HEART_METRICS):
 - systolic_bp (integer, nullable) 
 - diastolic_bp (integer, nullable)
 - hrv_score (integer, nullable)
-- created_at (timestamp, auto-generated)
-- updated_at (timestamp, auto-generated)
-
-biomarker_activity table (for ACTIVITY_METRICS):
-- id (uuid, auto-generated)
-- patient_id (uuid, will be provided as PATIENT_ID_PLACEHOLDER)
-- measurement_date (date)
-- measurement_time (timestamp, will use current time)
-- device_type (text, default: 'manual')
-- data_source (text, default: 'document_upload')
-- steps_count (integer, nullable)
-- total_calories (integer, nullable)
-- active_calories (integer, nullable)
-- exercise_minutes (integer, nullable)
 - created_at (timestamp, auto-generated)
 - updated_at (timestamp, auto-generated)
 
@@ -110,15 +97,15 @@ REQUIRED RESPONSE FORMAT:
     }
   },
   "sqlQueries": [
-    "INSERT INTO clinical_diagnostic_lab_tests (patient_id, test_name, test_category, test_type, numeric_value, result_value, unit, reference_range_min, reference_range_max, measurement_time, data_source) VALUES ('PATIENT_ID_PLACEHOLDER', 'Hemoglobin A1c', 'lab_work', 'blood_chemistry', 6.1, '6.1', '%', 5.7, 6.4, 'CURRENT_TIMESTAMP_PLACEHOLDER', 'document_upload');"
+    "INSERT INTO clinical_diagnostic_lab_tests (patient_id, test_name, test_category, test_type, numeric_value, result_value, unit, reference_range_min, reference_range_max, measurement_time, data_source) VALUES ('${patient_id}', 'Hemoglobin A1c', 'lab_work', 'blood_chemistry', 6.1, '6.1', '%', 5.7, 6.4, '${new Date().toISOString()}', 'document_upload');"
   ],
   "recommendations": []
 }
 
 SQL GENERATION RULES:
 1. Generate complete INSERT statements for each extracted data point
-2. Use 'PATIENT_ID_PLACEHOLDER' for patient_id values (will be replaced)
-3. Use 'CURRENT_TIMESTAMP_PLACEHOLDER' for timestamp values (will be replaced)
+2. ALWAYS use the provided patient_id: '${patient_id}' for patient_id values (do NOT use placeholders)
+3. Use current timestamp in ISO format for timestamp values
 4. Include proper NULL handling for missing values
 5. Escape single quotes in text values by doubling them
 6. Only generate SQL for data you extract in extractedFields
@@ -130,10 +117,10 @@ EXTRACTION RULES:
 2. Map test names to standard terminology
 3. Include units, reference ranges, and numeric values
 4. Only include data you are >90% confident about
-5. Generate corresponding SQL INSERT for each extracted field
+5. Generate corresponding SQL INSERT for each extracted field using the actual patient_id: ${patient_id}
 6. Maintain data consistency between extractedFields and sqlQueries
 
-Be thorough and generate both structured data and corresponding SQL statements.`;
+Be thorough and generate both structured data and corresponding SQL statements with the real patient ID.`;
 
     const userPrompt = `Analyze this medical document and extract structured data according to the medical data extraction protocol:
 

@@ -163,14 +163,18 @@ const MedicalDataProcessor: React.FC = () => {
     addLog('AI Processing', 'processing', 'Sending text to AI for medical data extraction...');
     
     try {
-      // Store the query being sent
-      const queryData = { text, filename: file?.name || 'Direct Text Input' };
+      // Store the query being sent with patient ID
+      const queryData = { 
+        text, 
+        filename: file?.name || 'Direct Text Input',
+        patient_id: effectivePatientId  // Add patient ID to the request
+      };
       setProcessing(prev => ({ 
         ...prev, 
         llmQuery: JSON.stringify(queryData, null, 2)
       }));
 
-      addLog('AI Processing', 'info', `Sending ${text.length} characters to Azure OpenAI...`);
+      addLog('AI Processing', 'info', `Sending ${text.length} characters to Azure OpenAI for Patient ID: ${effectivePatientId}...`);
 
       const { data, error } = await supabase.functions.invoke('process-medical-document', {
         body: queryData,
