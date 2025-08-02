@@ -44,84 +44,56 @@ serve(async (req) => {
       throw new Error('Azure OpenAI configuration missing');
     }
 
-    // Schema-driven medical data extraction prompt
-    const systemPrompt = `You are a medical data extraction specialist. Your ONLY job is to extract data from medical documents that EXACTLY matches the predefined database schema below.
+    // Enhanced medical data extraction prompt with SQL generation
+    const systemPrompt = `You are a medical data extraction specialist and SQL query generator. Your job is to:
+1. Extract structured data from medical documents according to the database schema
+2. Generate complete SQL INSERT statements for the extracted data
 
-CRITICAL RULE: You can ONLY extract data for columns that exist in the schema. If a data point doesn't match any column name below, IGNORE IT completely.
+DATABASE SCHEMA FOR SQL GENERATION:
 
-DATABASE SCHEMA - EXTRACT ONLY THESE EXACT COLUMNS:
+clinical_diagnostic_lab_tests table (for LAB_RESULTS):
+- id (uuid, auto-generated)
+- patient_id (uuid, will be provided as PATIENT_ID_PLACEHOLDER)
+- test_name (text, required)
+- test_category (text, default: 'lab_work') 
+- test_type (text, default: 'blood_chemistry')
+- numeric_value (numeric, nullable)
+- result_value (text, nullable)
+- unit (text, nullable)
+- reference_range_min (numeric, nullable)
+- reference_range_max (numeric, nullable)
+- measurement_time (timestamp, will use current time)
+- data_source (text, default: 'document_upload')
+- created_at (timestamp, auto-generated)
+- updated_at (timestamp, auto-generated)
 
-LAB_RESULTS (Primary biomarker data) - maps to clinical_diagnostic_lab_tests table:
-- test_name (text) - REQUIRED: Medical test names like "Hemoglobin A1c", "Glucose", "Cholesterol", "TSH", etc.
-- numeric_value (number) - The numerical result value  
-- unit (text) - Units exactly as written (g/dL, mg/dL, U/L, %, etc.)
-- result_value (text) - Text representation of the result (can be same as numeric_value)
-- reference_range_min (number) - Lower bound of normal range
-- reference_range_max (number) - Upper bound of normal range
+biomarker_heart table (for HEART_METRICS):
+- id (uuid, auto-generated)
+- patient_id (uuid, will be provided as PATIENT_ID_PLACEHOLDER)
+- measurement_time (timestamp, will use current time)
+- device_type (text, default: 'manual')
+- data_source (text, default: 'document_upload')
+- resting_heart_rate (integer, nullable)
+- max_heart_rate (integer, nullable)
+- systolic_bp (integer, nullable) 
+- diastolic_bp (integer, nullable)
+- hrv_score (integer, nullable)
+- created_at (timestamp, auto-generated)
+- updated_at (timestamp, auto-generated)
 
-HEART_METRICS (Cardiovascular biomarkers):
-- measurement_timestamp (timestamp) - Format: YYYY-MM-DDTHH:MM:SSZ
-- device_type (text) - "manual", "ecg", "monitor"
-- resting_heart_rate (integer) - Resting heart rate in BPM
-- max_heart_rate (integer) - Maximum heart rate in BPM
-- systolic_bp (integer) - Systolic blood pressure
-- diastolic_bp (integer) - Diastolic blood pressure
-- hrv_score (integer) - Heart rate variability score
-
-ACTIVITY_METRICS (Physical activity biomarkers):
-- measurement_date (date) - Format: YYYY-MM-DD
-- measurement_timestamp (timestamp) - Format: YYYY-MM-DDTHH:MM:SSZ
-- device_type (text) - "manual", "tracker", "smartwatch"
-- steps_count (integer) - Number of steps
-- total_calories (integer) - Total calories burned
-- active_calories (integer) - Active calories burned
-- exercise_minutes (integer) - Exercise duration in minutes
-
-SLEEP_METRICS (Sleep biomarkers):
-- sleep_date (date) - Format: YYYY-MM-DD
-- device_type (text) - "manual", "tracker", "study"
-- total_sleep_time (integer) - Total sleep in minutes
-- deep_sleep_minutes (integer) - Deep sleep duration
-- rem_sleep_minutes (integer) - REM sleep duration
-- light_sleep_minutes (integer) - Light sleep duration
-- sleep_efficiency (numeric) - Sleep efficiency percentage
-- sleep_score (integer) - Overall sleep quality score
-
-NUTRITION_METRICS (Nutritional biomarkers):
-- measurement_date (date) - Format: YYYY-MM-DD
-- total_calories (integer) - Total daily calories
-- protein_grams (numeric) - Protein intake in grams
-- carbohydrates_grams (numeric) - Carbs in grams
-- fat_grams (numeric) - Fat in grams
-- fiber_grams (numeric) - Fiber in grams
-- vitamin_d_iu (numeric) - Vitamin D in IU
-- vitamin_b12_mcg (numeric) - B12 in micrograms
-- calcium_mg (numeric) - Calcium in milligrams
-- iron_mg (numeric) - Iron in milligrams
-
-MICROBIOME_METRICS (Gut health biomarkers):
-- test_date (date) - Format: YYYY-MM-DD
-- test_provider (text) - Lab/company name
-- alpha_diversity (numeric) - Alpha diversity score
-- beneficial_bacteria_score (integer) - Beneficial bacteria percentage
-- pathogenic_bacteria_score (integer) - Pathogenic bacteria percentage
-- butyrate_production (numeric) - Butyrate production level
-
-ENVIRONMENTAL_METRICS (Environmental biomarkers):
-- measurement_date (date) - Format: YYYY-MM-DD
-- measurement_timestamp (timestamp) - Format: YYYY-MM-DDTHH:MM:SSZ
-- device_type (text) - "manual", "sensor", "monitor"
-- air_quality_index (integer) - AQI value
-- uv_exposure_minutes (integer) - UV exposure time
-- weather_temperature (numeric) - Temperature
-
-RECOVERY_STRAIN_METRICS (Recovery biomarkers):
-- measurement_date (date) - Format: YYYY-MM-DD
-- device_type (text) - "manual", "wearable"
-- recovery_score (integer) - Recovery score 0-100
-- strain_score (numeric) - Strain/stress score
-- hrv_score (integer) - HRV recovery score
-- sleep_performance_score (integer) - Sleep contribution to recovery
+biomarker_activity table (for ACTIVITY_METRICS):
+- id (uuid, auto-generated)
+- patient_id (uuid, will be provided as PATIENT_ID_PLACEHOLDER)
+- measurement_date (date)
+- measurement_time (timestamp, will use current time)
+- device_type (text, default: 'manual')
+- data_source (text, default: 'document_upload')
+- steps_count (integer, nullable)
+- total_calories (integer, nullable)
+- active_calories (integer, nullable)
+- exercise_minutes (integer, nullable)
+- created_at (timestamp, auto-generated)
+- updated_at (timestamp, auto-generated)
 
 REQUIRED RESPONSE FORMAT:
 {
@@ -135,36 +107,33 @@ REQUIRED RESPONSE FORMAT:
       "result_value": "6.1",
       "reference_range_min": 5.7,
       "reference_range_max": 6.4
-    },
-    "LAB_RESULTS_2": {
-      "test_name": "Glucose",
-      "numeric_value": 95,
-      "unit": "mg/dL",
-      "result_value": "95"
-    },
-    "HEART_METRICS": {
-      "measurement_timestamp": "2024-01-15T09:00:00Z",
-      "device_type": "manual",
-      "systolic_bp": 120,
-      "diastolic_bp": 80
     }
   },
+  "sqlQueries": [
+    "INSERT INTO clinical_diagnostic_lab_tests (patient_id, test_name, test_category, test_type, numeric_value, result_value, unit, reference_range_min, reference_range_max, measurement_time, data_source) VALUES ('PATIENT_ID_PLACEHOLDER', 'Hemoglobin A1c', 'lab_work', 'blood_chemistry', 6.1, '6.1', '%', 5.7, 6.4, 'CURRENT_TIMESTAMP_PLACEHOLDER', 'document_upload');"
+  ],
   "recommendations": []
 }
 
+SQL GENERATION RULES:
+1. Generate complete INSERT statements for each extracted data point
+2. Use 'PATIENT_ID_PLACEHOLDER' for patient_id values (will be replaced)
+3. Use 'CURRENT_TIMESTAMP_PLACEHOLDER' for timestamp values (will be replaced)
+4. Include proper NULL handling for missing values
+5. Escape single quotes in text values by doubling them
+6. Only generate SQL for data you extract in extractedFields
+7. Each SQL statement must be complete and executable
+8. Use appropriate table based on data type (clinical_diagnostic_lab_tests for lab results, etc.)
+
 EXTRACTION RULES:
-1. ONLY extract data for columns that exist in the schema above
-2. If document contains data not in schema, IGNORE it completely
-3. Use exact column names from schema (result_name, numeric_value, etc.)
-4. For multiple lab results, use LAB_RESULTS_1, LAB_RESULTS_2, etc.
-5. Extract result name, value, units, and date for each biomarker
-6. Map similar test names to standard names (e.g., "HGB" → "Hemoglobin")
-7. Only include data you are >90% confident about
-8. If no schema-matching data found, return empty extractedFields
+1. Extract medical test results, vital signs, and biomarker data
+2. Map test names to standard terminology
+3. Include units, reference ranges, and numeric values
+4. Only include data you are >90% confident about
+5. Generate corresponding SQL INSERT for each extracted field
+6. Maintain data consistency between extractedFields and sqlQueries
 
-CRITICAL: Your response must be valid JSON that only contains columns from the schema above.
-
-Be thorough and extract ALL available data points that match the schema with high confidence.`;
+Be thorough and generate both structured data and corresponding SQL statements.`;
 
     const userPrompt = `Analyze this medical document and extract structured data according to the medical data extraction protocol:
 
@@ -308,6 +277,9 @@ Return the complete structured JSON response with confidence scoring and uncerta
       documentType: parsedResult.documentType || 'other',
       confidence: Math.min(1.0, Math.max(0.0, parsedResult.confidence || 0.5)),
       extractedFields: parsedResult.extractedFields || {},
+      sqlQueries: Array.isArray(parsedResult.sqlQueries) 
+        ? parsedResult.sqlQueries.slice(0, 20)
+        : [],
       recommendations: Array.isArray(parsedResult.recommendations) 
         ? parsedResult.recommendations.slice(0, 10)
         : []
@@ -318,6 +290,7 @@ Return the complete structured JSON response with confidence scoring and uncerta
     console.log('📋 Document Type:', result.documentType);
     console.log('🎯 Confidence:', result.confidence);
     console.log('📊 Extracted Fields Count:', Object.keys(result.extractedFields).length);
+    console.log('🔍 SQL Queries Generated:', result.sqlQueries.length);
     console.log('💡 Recommendations Count:', result.recommendations.length);
     console.log('📄 Full Result:', JSON.stringify(result, null, 2));
     console.log('⏰ PROCESSING COMPLETED:', new Date().toISOString());
