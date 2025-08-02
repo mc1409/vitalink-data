@@ -51,10 +51,10 @@ CRITICAL RULE: You can ONLY extract data for columns that exist in the schema. I
 
 DATABASE SCHEMA - EXTRACT ONLY THESE EXACT COLUMNS:
 
-LAB_RESULTS (Primary biomarker data):
+LAB_RESULTS (Primary biomarker data) - maps to clinical_diagnostic_lab_tests table:
 - result_name (text) - MUST match medical test names like "Hemoglobin", "Glucose", "Cholesterol", "TSH", etc.
-- numeric_value (number) - The numerical result value
-- units (text) - Units exactly as written (g/dL, mg/dL, U/L, etc.)
+- numeric_value (number) - The numerical result value  
+- unit (text) - Units exactly as written (g/dL, mg/dL, U/L, etc.) [NOTE: singular "unit", not "units"]
 - abnormal_flag (text) - ONLY: "normal", "high", "low", "critical_high", "critical_low"
 - reference_range_min (number) - Lower bound of normal range
 - reference_range_max (number) - Upper bound of normal range
@@ -131,13 +131,13 @@ REQUIRED RESPONSE FORMAT:
     "LAB_RESULTS_1": {
       "result_name": "Hemoglobin",
       "numeric_value": 14.5,
-      "units": "g/dL",
+      "unit": "g/dL",
       "abnormal_flag": "normal"
     },
     "LAB_RESULTS_2": {
       "result_name": "Glucose",
       "numeric_value": 95,
-      "units": "mg/dL",
+      "unit": "mg/dL",
       "abnormal_flag": "normal"
     },
     "HEART_METRICS": {

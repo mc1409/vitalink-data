@@ -236,7 +236,7 @@ const ComprehensiveMedicalProcessor: React.FC<ComprehensiveMedicalProcessorProps
               test_type: 'blood_chemistry',
               numeric_value: data.numeric_value,
               result_value: data.numeric_value?.toString() || data.result_value,
-              unit: data.units || data.unit,
+              unit: data.unit || data.units,
               reference_range_min: data.reference_range_min,
               reference_range_max: data.reference_range_max,
               measurement_time: new Date().toISOString(),
