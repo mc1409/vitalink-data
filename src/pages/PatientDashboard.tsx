@@ -206,25 +206,16 @@ const PatientDashboard = () => {
         </TabsContent>
 
         <TabsContent value="upload" className="space-y-6">
-          {selectedPatientId ? (
-            <div className="space-y-6">
-              <ComprehensiveMedicalProcessor 
-                patientId={selectedPatientId} 
-                patientName={selectedPatientName || undefined}
-              />
-              <PatientDocumentUpload 
-                patientId={selectedPatientId} 
-                patientName={selectedPatientName || undefined}
-              />
-            </div>
-          ) : (
-            <Card>
-              <CardHeader>
-                <CardTitle>Document Upload</CardTitle>
-                <CardDescription>Please select a patient to upload medical documents</CardDescription>
-              </CardHeader>
-            </Card>
-          )}
+          <div className="space-y-6">
+            <ComprehensiveMedicalProcessor 
+              patientId={selectedPatientId}
+              patientName={selectedPatientName || undefined}
+            />
+            <PatientDocumentUpload 
+              patientId={selectedPatientId || ''} 
+              patientName={selectedPatientName || undefined}
+            />
+          </div>
         </TabsContent>
 
         <TabsContent value="database" className="space-y-6">

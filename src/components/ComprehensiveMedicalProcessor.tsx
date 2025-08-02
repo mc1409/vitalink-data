@@ -21,9 +21,10 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { usePrimaryPatient } from '@/hooks/usePrimaryPatient';
 
 interface ComprehensiveMedicalProcessorProps {
-  patientId: string;
+  patientId?: string;
   patientName?: string;
 }
 
@@ -50,8 +51,14 @@ const ComprehensiveMedicalProcessor: React.FC<ComprehensiveMedicalProcessorProps
   patientId, 
   patientName = 'Selected Patient' 
 }) => {
+  const { primaryPatient } = usePrimaryPatient();
   const [status, setStatus] = useState<ProcessingStatus | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // Use primary patient if no specific patient ID provided
+  const effectivePatientId = patientId || primaryPatient?.id;
+  const effectivePatientName = patientName !== 'Selected Patient' ? patientName : 
+    (primaryPatient ? `${primaryPatient.first_name} ${primaryPatient.last_name}` : patientName);
 
   const addLog = useCallback((step: string, status: ProcessingLog['status'], message: string, data?: any) => {
     const log: ProcessingLog = {
@@ -79,7 +86,13 @@ const ComprehensiveMedicalProcessor: React.FC<ComprehensiveMedicalProcessorProps
 
   const handleFileUpload = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file || !patientId) return;
+    if (!file || !effectivePatientId) {
+      if (!effectivePatientId) {
+        toast.error('No patient selected. Please select a patient first.');
+        return;
+      }
+      return;
+    }
 
     // Validate file type
     const allowedTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
@@ -109,7 +122,7 @@ const ComprehensiveMedicalProcessor: React.FC<ComprehensiveMedicalProcessorProps
 
       // Step 1: Upload file to storage
       const fileExt = file.name.split('.').pop();
-      const fileName = `${Date.now()}_${patientId}.${fileExt}`;
+      const fileName = `${Date.now()}_${effectivePatientId}.${fileExt}`;
       const filePath = `medical-documents/${fileName}`;
 
       updateProgress(10, 'uploading');
@@ -129,7 +142,7 @@ const ComprehensiveMedicalProcessor: React.FC<ComprehensiveMedicalProcessorProps
         .from('document_processing_logs')
         .insert({
           user_id: user.user?.id || '',
-          patient_id: patientId,
+          patient_id: effectivePatientId,
           filename: file.name,
           file_size: file.size,
           storage_path: filePath,
@@ -162,16 +175,16 @@ const ComprehensiveMedicalProcessor: React.FC<ComprehensiveMedicalProcessorProps
       // Step 4: Process with AI
       addLog('AI Processing', 'processing', 'Sending document to AI for medical data extraction...');
 
-      const { data: aiResult, error: aiError } = await supabase.functions.invoke(
-        'process-medical-document',
-        {
-          body: {
-            text: extractResult.extractedText,
-            filename: file.name,
-            patient_id: patientId
+        const { data: aiResult, error: aiError } = await supabase.functions.invoke(
+          'process-medical-document',
+          {
+            body: {
+              text: extractResult.extractedText,
+              filename: file.name,
+              patient_id: effectivePatientId
+            }
           }
-        }
-      );
+        );
 
       if (aiError) throw aiError;
 
@@ -203,7 +216,7 @@ const ComprehensiveMedicalProcessor: React.FC<ComprehensiveMedicalProcessorProps
             const { error: saveError } = await supabase
               .from('clinical_diagnostic_lab_tests')
               .insert({
-                patient_id: patientId,
+                patient_id: effectivePatientId,
                 test_name: data.result_name,
                 test_category: 'lab_work',
                 test_type: 'blood_chemistry',
@@ -264,7 +277,7 @@ const ComprehensiveMedicalProcessor: React.FC<ComprehensiveMedicalProcessorProps
       // Reset file input
       event.target.value = '';
     }
-  }, [patientId, addLog, updateProgress]);
+  }, [effectivePatientId, addLog, updateProgress]);
 
   const getStatusIcon = () => {
     if (!status) return null;
@@ -318,12 +331,14 @@ const ComprehensiveMedicalProcessor: React.FC<ComprehensiveMedicalProcessorProps
     }
   };
 
-  if (!patientId) {
+  if (!effectivePatientId) {
     return (
       <Card>
         <CardHeader>
           <CardTitle>Medical Document Processor</CardTitle>
-          <CardDescription>Please select a patient first</CardDescription>
+          <CardDescription>
+            {primaryPatient ? 'Loading patient information...' : 'Please select a patient first'}
+          </CardDescription>
         </CardHeader>
       </Card>
     );
@@ -338,7 +353,7 @@ const ComprehensiveMedicalProcessor: React.FC<ComprehensiveMedicalProcessorProps
             Comprehensive Medical Document Processor
           </CardTitle>
           <CardDescription>
-            Upload and process medical documents for {patientName} with complete database integration
+            Upload and process medical documents for {effectivePatientName} with complete database integration
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -346,7 +361,7 @@ const ComprehensiveMedicalProcessor: React.FC<ComprehensiveMedicalProcessorProps
           <Alert>
             <User className="h-4 w-4" />
             <AlertDescription>
-              <strong>Patient:</strong> {patientName} | <strong>Processing:</strong> Full document analysis with database storage
+              <strong>Patient:</strong> {effectivePatientName} | <strong>Processing:</strong> Full document analysis with database storage
             </AlertDescription>
           </Alert>
 

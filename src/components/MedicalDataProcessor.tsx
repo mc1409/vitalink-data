@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { usePrimaryPatient } from '@/hooks/usePrimaryPatient';
 
 interface ProcessingLog {
   id: string;
@@ -37,6 +38,7 @@ interface ProcessingState {
 }
 
 const MedicalDataProcessor: React.FC = () => {
+  const { primaryPatient } = usePrimaryPatient();
   const [file, setFile] = useState<File | null>(null);
   const [textInput, setTextInput] = useState('');
   const [processing, setProcessing] = useState<ProcessingState>({
@@ -364,18 +366,23 @@ const MedicalDataProcessor: React.FC = () => {
         throw new Error('User not authenticated');
       }
 
-      // Get the user's first patient (for this demo)
-      const { data: patients } = await supabase
-        .from('patients')
-        .select('id')
-        .eq('user_id', user.id)
-        .limit(1);
+      // Use primary patient if available, otherwise get first patient
+      let patientId = primaryPatient?.id;
+      
+      if (!patientId) {
+        // Get the user's first patient (for fallback)
+        const { data: patients } = await supabase
+          .from('patients')
+          .select('id')
+          .eq('user_id', user.id)
+          .limit(1);
 
-      if (!patients || patients.length === 0) {
-        throw new Error('No patient found. Please create a patient first.');
+        if (!patients || patients.length === 0) {
+          throw new Error('No patient found. Please create a patient first or refresh the page.');
+        }
+
+        patientId = patients[0].id;
       }
-
-      const patientId = patients[0].id;
 
       // Process each extracted data table according to schema
       for (const [tableName, data] of Object.entries(extractedData)) {
