@@ -24,25 +24,18 @@ export type Database = {
           distance_cycled_meters: number | null
           distance_ran_meters: number | null
           distance_walked_meters: number | null
-          exercise_goal_minutes: number | null
           exercise_minutes: number | null
           flights_climbed: number | null
           id: string
           measurement_date: string
           measurement_time: string
           moderate_activity_minutes: number | null
-          move_goal_calories: number | null
-          move_goal_percentage: number | null
           patient_id: string
-          raw_data: Json | null
-          reference_range_max: number | null
-          reference_range_min: number | null
           sedentary_minutes: number | null
           stand_goal_hours: number | null
           stand_hours: number | null
           steps_count: number | null
           total_calories: number | null
-          unit: string | null
           updated_at: string
           vigorous_activity_minutes: number | null
           workout_avg_heart_rate: number | null
@@ -50,7 +43,6 @@ export type Database = {
           workout_distance_meters: number | null
           workout_duration_minutes: number | null
           workout_max_heart_rate: number | null
-          workout_type: string | null
         }
         Insert: {
           active_calories?: number | null
@@ -61,25 +53,18 @@ export type Database = {
           distance_cycled_meters?: number | null
           distance_ran_meters?: number | null
           distance_walked_meters?: number | null
-          exercise_goal_minutes?: number | null
           exercise_minutes?: number | null
           flights_climbed?: number | null
           id?: string
           measurement_date: string
           measurement_time: string
           moderate_activity_minutes?: number | null
-          move_goal_calories?: number | null
-          move_goal_percentage?: number | null
           patient_id: string
-          raw_data?: Json | null
-          reference_range_max?: number | null
-          reference_range_min?: number | null
           sedentary_minutes?: number | null
           stand_goal_hours?: number | null
           stand_hours?: number | null
           steps_count?: number | null
           total_calories?: number | null
-          unit?: string | null
           updated_at?: string
           vigorous_activity_minutes?: number | null
           workout_avg_heart_rate?: number | null
@@ -87,7 +72,6 @@ export type Database = {
           workout_distance_meters?: number | null
           workout_duration_minutes?: number | null
           workout_max_heart_rate?: number | null
-          workout_type?: string | null
         }
         Update: {
           active_calories?: number | null
@@ -98,25 +82,18 @@ export type Database = {
           distance_cycled_meters?: number | null
           distance_ran_meters?: number | null
           distance_walked_meters?: number | null
-          exercise_goal_minutes?: number | null
           exercise_minutes?: number | null
           flights_climbed?: number | null
           id?: string
           measurement_date?: string
           measurement_time?: string
           moderate_activity_minutes?: number | null
-          move_goal_calories?: number | null
-          move_goal_percentage?: number | null
           patient_id?: string
-          raw_data?: Json | null
-          reference_range_max?: number | null
-          reference_range_min?: number | null
           sedentary_minutes?: number | null
           stand_goal_hours?: number | null
           stand_hours?: number | null
           steps_count?: number | null
           total_calories?: number | null
-          unit?: string | null
           updated_at?: string
           vigorous_activity_minutes?: number | null
           workout_avg_heart_rate?: number | null
@@ -124,7 +101,6 @@ export type Database = {
           workout_distance_meters?: number | null
           workout_duration_minutes?: number | null
           workout_max_heart_rate?: number | null
-          workout_type?: string | null
         }
         Relationships: [
           {
@@ -162,7 +138,6 @@ export type Database = {
           id: string
           immune_function_score: number | null
           inflammatory_pathways_score: number | null
-          lab_processing_date: string | null
           lactobacillus_level: number | null
           max_strain_time: string | null
           measurement_time: string
@@ -175,15 +150,8 @@ export type Database = {
           propionate_production: number | null
           protein_utilization_score: number | null
           proteobacteria_level: number | null
-          raw_data: Json | null
-          recommendations: Json | null
           recovery_score: number | null
-          reference_range_max: number | null
-          reference_range_min: number | null
-          report_generated_date: string | null
           resting_hr_score: number | null
-          sample_collection_date: string | null
-          sample_type: string | null
           skin_temperature: number | null
           skin_temperature_deviation: number | null
           sleep_performance_score: number | null
@@ -193,7 +161,6 @@ export type Database = {
           test_date: string
           test_provider: string
           test_version: string | null
-          unit: string | null
           updated_at: string
           vitamin_b_production: number | null
           vitamin_k_production: number | null
@@ -223,7 +190,6 @@ export type Database = {
           id?: string
           immune_function_score?: number | null
           inflammatory_pathways_score?: number | null
-          lab_processing_date?: string | null
           lactobacillus_level?: number | null
           max_strain_time?: string | null
           measurement_time: string
@@ -236,15 +202,8 @@ export type Database = {
           propionate_production?: number | null
           protein_utilization_score?: number | null
           proteobacteria_level?: number | null
-          raw_data?: Json | null
-          recommendations?: Json | null
           recovery_score?: number | null
-          reference_range_max?: number | null
-          reference_range_min?: number | null
-          report_generated_date?: string | null
           resting_hr_score?: number | null
-          sample_collection_date?: string | null
-          sample_type?: string | null
           skin_temperature?: number | null
           skin_temperature_deviation?: number | null
           sleep_performance_score?: number | null
@@ -254,7 +213,6 @@ export type Database = {
           test_date: string
           test_provider: string
           test_version?: string | null
-          unit?: string | null
           updated_at?: string
           vitamin_b_production?: number | null
           vitamin_k_production?: number | null
@@ -284,7 +242,6 @@ export type Database = {
           id?: string
           immune_function_score?: number | null
           inflammatory_pathways_score?: number | null
-          lab_processing_date?: string | null
           lactobacillus_level?: number | null
           max_strain_time?: string | null
           measurement_time?: string
@@ -297,15 +254,8 @@ export type Database = {
           propionate_production?: number | null
           protein_utilization_score?: number | null
           proteobacteria_level?: number | null
-          raw_data?: Json | null
-          recommendations?: Json | null
           recovery_score?: number | null
-          reference_range_max?: number | null
-          reference_range_min?: number | null
-          report_generated_date?: string | null
           resting_hr_score?: number | null
-          sample_collection_date?: string | null
-          sample_type?: string | null
           skin_temperature?: number | null
           skin_temperature_deviation?: number | null
           sleep_performance_score?: number | null
@@ -315,7 +265,6 @@ export type Database = {
           test_date?: string
           test_provider?: string
           test_version?: string | null
-          unit?: string | null
           updated_at?: string
           vitamin_b_production?: number | null
           vitamin_k_production?: number | null
@@ -340,28 +289,18 @@ export type Database = {
           device_type: string
           diastolic_bp: number | null
           ecg_rhythm_classification: string | null
-          hr_zone_1_minutes: number | null
-          hr_zone_2_minutes: number | null
-          hr_zone_3_minutes: number | null
-          hr_zone_4_minutes: number | null
-          hr_zone_5_minutes: number | null
           hrv_rmssd: number | null
           hrv_score: number | null
           hrv_sdnn: number | null
           id: string
           irregular_rhythm_detected: boolean | null
           max_heart_rate: number | null
-          measurement_context: string | null
           measurement_time: string
           min_heart_rate: number | null
           patient_id: string
-          raw_data: Json | null
           recovery_heart_rate: number | null
-          reference_range_max: number | null
-          reference_range_min: number | null
           resting_heart_rate: number | null
           systolic_bp: number | null
-          unit: string | null
           updated_at: string
           vo2_max: number | null
           walking_heart_rate: number | null
@@ -376,28 +315,18 @@ export type Database = {
           device_type: string
           diastolic_bp?: number | null
           ecg_rhythm_classification?: string | null
-          hr_zone_1_minutes?: number | null
-          hr_zone_2_minutes?: number | null
-          hr_zone_3_minutes?: number | null
-          hr_zone_4_minutes?: number | null
-          hr_zone_5_minutes?: number | null
           hrv_rmssd?: number | null
           hrv_score?: number | null
           hrv_sdnn?: number | null
           id?: string
           irregular_rhythm_detected?: boolean | null
           max_heart_rate?: number | null
-          measurement_context?: string | null
           measurement_time: string
           min_heart_rate?: number | null
           patient_id: string
-          raw_data?: Json | null
           recovery_heart_rate?: number | null
-          reference_range_max?: number | null
-          reference_range_min?: number | null
           resting_heart_rate?: number | null
           systolic_bp?: number | null
-          unit?: string | null
           updated_at?: string
           vo2_max?: number | null
           walking_heart_rate?: number | null
@@ -412,28 +341,18 @@ export type Database = {
           device_type?: string
           diastolic_bp?: number | null
           ecg_rhythm_classification?: string | null
-          hr_zone_1_minutes?: number | null
-          hr_zone_2_minutes?: number | null
-          hr_zone_3_minutes?: number | null
-          hr_zone_4_minutes?: number | null
-          hr_zone_5_minutes?: number | null
           hrv_rmssd?: number | null
           hrv_score?: number | null
           hrv_sdnn?: number | null
           id?: string
           irregular_rhythm_detected?: boolean | null
           max_heart_rate?: number | null
-          measurement_context?: string | null
           measurement_time?: string
           min_heart_rate?: number | null
           patient_id?: string
-          raw_data?: Json | null
           recovery_heart_rate?: number | null
-          reference_range_max?: number | null
-          reference_range_min?: number | null
           resting_heart_rate?: number | null
           systolic_bp?: number | null
-          unit?: string | null
           updated_at?: string
           vo2_max?: number | null
           walking_heart_rate?: number | null
@@ -454,22 +373,17 @@ export type Database = {
           added_sugar_grams: number | null
           alcohol_grams: number | null
           biotin_mcg: number | null
-          breakfast_calories: number | null
           caffeine_mg: number | null
           calcium_mg: number | null
           carbohydrates_grams: number | null
           created_at: string
           data_source: string
-          dinner_calories: number | null
-          eating_window_hours: number | null
           fat_grams: number | null
           fiber_grams: number | null
           folate_mcg: number | null
           id: string
           iron_mg: number | null
-          lunch_calories: number | null
           magnesium_mg: number | null
-          meal_data: Json | null
           measurement_date: string
           measurement_time: string
           niacin_mg: number | null
@@ -478,16 +392,11 @@ export type Database = {
           phosphorus_mg: number | null
           potassium_mg: number | null
           protein_grams: number | null
-          reference_range_max: number | null
-          reference_range_min: number | null
           riboflavin_mg: number | null
-          snack_calories: number | null
           sodium_mg: number | null
           sugar_grams: number | null
-          supplement_data: Json | null
           thiamine_mg: number | null
           total_calories: number | null
-          unit: string | null
           updated_at: string
           vitamin_a_iu: number | null
           vitamin_b12_mcg: number | null
@@ -503,22 +412,17 @@ export type Database = {
           added_sugar_grams?: number | null
           alcohol_grams?: number | null
           biotin_mcg?: number | null
-          breakfast_calories?: number | null
           caffeine_mg?: number | null
           calcium_mg?: number | null
           carbohydrates_grams?: number | null
           created_at?: string
           data_source: string
-          dinner_calories?: number | null
-          eating_window_hours?: number | null
           fat_grams?: number | null
           fiber_grams?: number | null
           folate_mcg?: number | null
           id?: string
           iron_mg?: number | null
-          lunch_calories?: number | null
           magnesium_mg?: number | null
-          meal_data?: Json | null
           measurement_date: string
           measurement_time: string
           niacin_mg?: number | null
@@ -527,16 +431,11 @@ export type Database = {
           phosphorus_mg?: number | null
           potassium_mg?: number | null
           protein_grams?: number | null
-          reference_range_max?: number | null
-          reference_range_min?: number | null
           riboflavin_mg?: number | null
-          snack_calories?: number | null
           sodium_mg?: number | null
           sugar_grams?: number | null
-          supplement_data?: Json | null
           thiamine_mg?: number | null
           total_calories?: number | null
-          unit?: string | null
           updated_at?: string
           vitamin_a_iu?: number | null
           vitamin_b12_mcg?: number | null
@@ -552,22 +451,17 @@ export type Database = {
           added_sugar_grams?: number | null
           alcohol_grams?: number | null
           biotin_mcg?: number | null
-          breakfast_calories?: number | null
           caffeine_mg?: number | null
           calcium_mg?: number | null
           carbohydrates_grams?: number | null
           created_at?: string
           data_source?: string
-          dinner_calories?: number | null
-          eating_window_hours?: number | null
           fat_grams?: number | null
           fiber_grams?: number | null
           folate_mcg?: number | null
           id?: string
           iron_mg?: number | null
-          lunch_calories?: number | null
           magnesium_mg?: number | null
-          meal_data?: Json | null
           measurement_date?: string
           measurement_time?: string
           niacin_mg?: number | null
@@ -576,16 +470,11 @@ export type Database = {
           phosphorus_mg?: number | null
           potassium_mg?: number | null
           protein_grams?: number | null
-          reference_range_max?: number | null
-          reference_range_min?: number | null
           riboflavin_mg?: number | null
-          snack_calories?: number | null
           sodium_mg?: number | null
           sugar_grams?: number | null
-          supplement_data?: Json | null
           thiamine_mg?: number | null
           total_calories?: number | null
-          unit?: string | null
           updated_at?: string
           vitamin_a_iu?: number | null
           vitamin_b12_mcg?: number | null
@@ -609,7 +498,6 @@ export type Database = {
       }
       biomarker_sleep: {
         Row: {
-          ambient_light_level: number | null
           avg_body_temperature: number | null
           avg_heart_rate: number | null
           avg_hrv: number | null
@@ -627,14 +515,9 @@ export type Database = {
           measurement_time: string
           min_heart_rate: number | null
           min_spo2: number | null
-          noise_level: number | null
           patient_id: string
-          raw_data: Json | null
-          reference_range_max: number | null
-          reference_range_min: number | null
           rem_sleep_minutes: number | null
           restfulness_score: number | null
-          room_temperature: number | null
           sleep_date: string
           sleep_debt: number | null
           sleep_disturbances: number | null
@@ -646,12 +529,10 @@ export type Database = {
           temperature_deviation: number | null
           time_in_bed: number | null
           total_sleep_time: number | null
-          unit: string | null
           updated_at: string
           wake_time: string | null
         }
         Insert: {
-          ambient_light_level?: number | null
           avg_body_temperature?: number | null
           avg_heart_rate?: number | null
           avg_hrv?: number | null
@@ -669,14 +550,9 @@ export type Database = {
           measurement_time: string
           min_heart_rate?: number | null
           min_spo2?: number | null
-          noise_level?: number | null
           patient_id: string
-          raw_data?: Json | null
-          reference_range_max?: number | null
-          reference_range_min?: number | null
           rem_sleep_minutes?: number | null
           restfulness_score?: number | null
-          room_temperature?: number | null
           sleep_date: string
           sleep_debt?: number | null
           sleep_disturbances?: number | null
@@ -688,12 +564,10 @@ export type Database = {
           temperature_deviation?: number | null
           time_in_bed?: number | null
           total_sleep_time?: number | null
-          unit?: string | null
           updated_at?: string
           wake_time?: string | null
         }
         Update: {
-          ambient_light_level?: number | null
           avg_body_temperature?: number | null
           avg_heart_rate?: number | null
           avg_hrv?: number | null
@@ -711,14 +585,9 @@ export type Database = {
           measurement_time?: string
           min_heart_rate?: number | null
           min_spo2?: number | null
-          noise_level?: number | null
           patient_id?: string
-          raw_data?: Json | null
-          reference_range_max?: number | null
-          reference_range_min?: number | null
           rem_sleep_minutes?: number | null
           restfulness_score?: number | null
-          room_temperature?: number | null
           sleep_date?: string
           sleep_debt?: number | null
           sleep_disturbances?: number | null
@@ -730,7 +599,6 @@ export type Database = {
           temperature_deviation?: number | null
           time_in_bed?: number | null
           total_sleep_time?: number | null
-          unit?: string | null
           updated_at?: string
           wake_time?: string | null
         }
@@ -747,110 +615,71 @@ export type Database = {
       clinical_diagnostic_cardiovascular: {
         Row: {
           axis_degrees: number | null
-          blood_pressure_peak: string | null
           created_at: string
           data_source: string
           diastolic_bp: number | null
-          ecg_interpretation: string | null
           exercise_duration: number | null
-          findings: string | null
           heart_rate: number | null
           id: string
-          interpretation: string | null
           max_heart_rate: number | null
           measurement_time: string
           mets_achieved: number | null
           patient_id: string
-          performing_facility: string | null
-          performing_physician: string | null
           pr_interval: number | null
           qrs_duration: number | null
           qt_interval: number | null
           qtc_interval: number | null
-          raw_data: Json | null
-          reference_range_max: number | null
-          reference_range_min: number | null
-          rhythm: string | null
-          stress_test_result: string | null
-          stress_test_type: string | null
           systolic_bp: number | null
           target_heart_rate: number | null
           test_date: string
           test_status: string | null
           test_type: string
-          unit: string | null
           updated_at: string
         }
         Insert: {
           axis_degrees?: number | null
-          blood_pressure_peak?: string | null
           created_at?: string
           data_source: string
           diastolic_bp?: number | null
-          ecg_interpretation?: string | null
           exercise_duration?: number | null
-          findings?: string | null
           heart_rate?: number | null
           id?: string
-          interpretation?: string | null
           max_heart_rate?: number | null
           measurement_time: string
           mets_achieved?: number | null
           patient_id: string
-          performing_facility?: string | null
-          performing_physician?: string | null
           pr_interval?: number | null
           qrs_duration?: number | null
           qt_interval?: number | null
           qtc_interval?: number | null
-          raw_data?: Json | null
-          reference_range_max?: number | null
-          reference_range_min?: number | null
-          rhythm?: string | null
-          stress_test_result?: string | null
-          stress_test_type?: string | null
           systolic_bp?: number | null
           target_heart_rate?: number | null
           test_date: string
           test_status?: string | null
           test_type: string
-          unit?: string | null
           updated_at?: string
         }
         Update: {
           axis_degrees?: number | null
-          blood_pressure_peak?: string | null
           created_at?: string
           data_source?: string
           diastolic_bp?: number | null
-          ecg_interpretation?: string | null
           exercise_duration?: number | null
-          findings?: string | null
           heart_rate?: number | null
           id?: string
-          interpretation?: string | null
           max_heart_rate?: number | null
           measurement_time?: string
           mets_achieved?: number | null
           patient_id?: string
-          performing_facility?: string | null
-          performing_physician?: string | null
           pr_interval?: number | null
           qrs_duration?: number | null
           qt_interval?: number | null
           qtc_interval?: number | null
-          raw_data?: Json | null
-          reference_range_max?: number | null
-          reference_range_min?: number | null
-          rhythm?: string | null
-          stress_test_result?: string | null
-          stress_test_type?: string | null
           systolic_bp?: number | null
           target_heart_rate?: number | null
           test_date?: string
           test_status?: string | null
           test_type?: string
-          unit?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -865,128 +694,65 @@ export type Database = {
       }
       clinical_diagnostic_lab_tests: {
         Row: {
-          abnormal_flag: string | null
           active: boolean | null
-          allergen: string | null
           collection_date: string | null
           created_at: string
           data_source: string
-          fasting_required: boolean | null
           id: string
-          interpretation: string | null
           is_out_of_range: boolean | null
           measurement_time: string
-          notes: string | null
           numeric_value: number | null
-          onset_date: string | null
-          order_date: string | null
-          ordering_physician: string | null
           patient_id: string
-          performing_lab: string | null
-          priority: string | null
-          raw_data: Json | null
-          reaction: string | null
           reference_range_max: number | null
           reference_range_min: number | null
-          reference_range_text: string | null
           result_date: string | null
-          result_status: string | null
           result_value: string | null
-          reviewing_physician: string | null
           sample_type: string | null
-          severity: string | null
-          standard_test_name: string | null
           test_category: string
-          test_code: string | null
           test_name: string
-          test_status: string | null
-          test_subcategory: string | null
           test_type: string
-          text_value: string | null
           unit: string | null
           updated_at: string
         }
         Insert: {
-          abnormal_flag?: string | null
           active?: boolean | null
-          allergen?: string | null
           collection_date?: string | null
           created_at?: string
           data_source: string
-          fasting_required?: boolean | null
           id?: string
-          interpretation?: string | null
           is_out_of_range?: boolean | null
           measurement_time: string
-          notes?: string | null
           numeric_value?: number | null
-          onset_date?: string | null
-          order_date?: string | null
-          ordering_physician?: string | null
           patient_id: string
-          performing_lab?: string | null
-          priority?: string | null
-          raw_data?: Json | null
-          reaction?: string | null
           reference_range_max?: number | null
           reference_range_min?: number | null
-          reference_range_text?: string | null
           result_date?: string | null
-          result_status?: string | null
           result_value?: string | null
-          reviewing_physician?: string | null
           sample_type?: string | null
-          severity?: string | null
-          standard_test_name?: string | null
           test_category: string
-          test_code?: string | null
           test_name: string
-          test_status?: string | null
-          test_subcategory?: string | null
           test_type: string
-          text_value?: string | null
           unit?: string | null
           updated_at?: string
         }
         Update: {
-          abnormal_flag?: string | null
           active?: boolean | null
-          allergen?: string | null
           collection_date?: string | null
           created_at?: string
           data_source?: string
-          fasting_required?: boolean | null
           id?: string
-          interpretation?: string | null
           is_out_of_range?: boolean | null
           measurement_time?: string
-          notes?: string | null
           numeric_value?: number | null
-          onset_date?: string | null
-          order_date?: string | null
-          ordering_physician?: string | null
           patient_id?: string
-          performing_lab?: string | null
-          priority?: string | null
-          raw_data?: Json | null
-          reaction?: string | null
           reference_range_max?: number | null
           reference_range_min?: number | null
-          reference_range_text?: string | null
           result_date?: string | null
-          result_status?: string | null
           result_value?: string | null
-          reviewing_physician?: string | null
           sample_type?: string | null
-          severity?: string | null
-          standard_test_name?: string | null
           test_category?: string
-          test_code?: string | null
           test_name?: string
-          test_status?: string | null
-          test_subcategory?: string | null
           test_type?: string
-          text_value?: string | null
           unit?: string | null
           updated_at?: string
         }
