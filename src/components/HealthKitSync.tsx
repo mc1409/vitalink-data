@@ -145,7 +145,7 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
   };
 
   // Helper function to process health data with robust error handling
-  const processBatchData = async (batchData: HealthKitData[], userId: string) => {
+  const processBatchData = async (batchData: HealthKitData[], patientId: string) => {
     let successCount = 0;
     let errorCount = 0;
     const errors: string[] = [];
@@ -229,7 +229,7 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
         // Activity data
         if (validatedData.steps > 0 || validatedData.activeCalories > 0) {
           activityRecords.push({
-            patient_id: userId,
+            patient_id: patientId,
             measurement_date: validatedData.date,
             measurement_time: new Date(`${validatedData.date}T12:00:00Z`).toISOString(),
             steps_count: validatedData.steps,
@@ -243,14 +243,14 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
 
         // Heart rate data
         if (validatedData.heartRate > 30) {
-          const variance = Math.random() * 10; // Add some variance for realistic data
+          const variance = Math.floor(Math.random() * 10); // Add some variance for realistic data
           heartRecords.push({
-            patient_id: userId,
+            patient_id: patientId,
             measurement_time: new Date(`${validatedData.date}T12:00:00Z`).toISOString(),
             average_heart_rate: validatedData.heartRate,
-            max_heart_rate: Math.min(220, validatedData.heartRate + variance + 10),
-            min_heart_rate: Math.max(30, validatedData.heartRate - variance),
-            resting_heart_rate: Math.max(30, Math.min(100, validatedData.heartRate - 5)),
+            max_heart_rate: Math.min(220, Math.floor(validatedData.heartRate + variance + 10)),
+            min_heart_rate: Math.max(30, Math.floor(validatedData.heartRate - variance)),
+            resting_heart_rate: Math.max(30, Math.min(100, Math.floor(validatedData.heartRate - 5))),
             device_type: 'HealthKit',
             data_source: 'Apple HealthKit',
             afib_detected: false,
@@ -262,7 +262,7 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
         if (validatedData.sleepHours > 0) {
           const totalMinutes = Math.round(validatedData.sleepHours * 60);
           sleepRecords.push({
-            patient_id: userId,
+            patient_id: patientId,
             measurement_time: new Date().toISOString(),
             sleep_date: validatedData.date,
             total_sleep_time: totalMinutes,
@@ -308,6 +308,19 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
       if (!userId || typeof userId !== 'string') {
         throw new Error('User authentication required. Please log in again.');
       }
+
+      // Get the user's primary patient ID
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('primary_patient_id')
+        .eq('user_id', userId)
+        .single();
+
+      if (profileError || !profile?.primary_patient_id) {
+        throw new Error('Patient profile not found. Please set up your patient profile first.');
+      }
+
+      const patientId = profile.primary_patient_id;
 
       // Determine sync range
       const endDate = new Date();
@@ -381,7 +394,7 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
             };
           });
 
-          const batchResult = await processBatchData(batchData, userId);
+          const batchResult = await processBatchData(batchData, patientId);
           totalSuccessful += batchResult.successCount;
           totalErrors += batchResult.errorCount;
           allErrors.push(...batchResult.errors);
