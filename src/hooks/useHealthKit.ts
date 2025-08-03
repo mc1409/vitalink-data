@@ -9,7 +9,9 @@ let CapacitorHealthkit: any = null;
 const loadHealthKit = async () => {
   if (typeof window !== 'undefined' && Capacitor.isNativePlatform()) {
     try {
-      const module = await import('@perfood/capacitor-healthkit');
+      // Use eval to prevent Vite from analyzing this import at build time
+      const modulePath = '@perfood/capacitor-healthkit';
+      const module = await (new Function('return import("' + modulePath + '")')());
       CapacitorHealthkit = module.CapacitorHealthkit;
       return true;
     } catch (error) {
