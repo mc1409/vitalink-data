@@ -155,7 +155,7 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
       if (records.length === 0) return;
       try {
         const { error } = await supabase.from('biomarker_activity').upsert(records, {
-          onConflict: 'patient_id,device_type,measurement_date',
+          onConflict: 'patient_id,measurement_date,data_source',
           ignoreDuplicates: false
         });
         if (error) {
@@ -177,7 +177,7 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
       if (records.length === 0) return;
       try {
         const { error } = await supabase.from('biomarker_heart').upsert(records, {
-          onConflict: 'patient_id,device_type,measurement_time',
+          onConflict: 'patient_id,measurement_time,data_source',
           ignoreDuplicates: false
         });
         if (error) {
@@ -199,7 +199,7 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
       if (records.length === 0) return;
       try {
         const { error } = await supabase.from('biomarker_sleep').upsert(records, {
-          onConflict: 'patient_id,device_type,sleep_date',
+          onConflict: 'patient_id,sleep_date,data_source',
           ignoreDuplicates: false
         });
         if (error) {
