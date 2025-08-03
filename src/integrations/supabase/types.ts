@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_insights_cache: {
+        Row: {
+          confidence_score: number | null
+          created_at: string
+          expires_at: string | null
+          generated_at: string
+          generated_data: Json
+          id: string
+          insight_type: string
+          patient_id: string
+          updated_at: string
+        }
+        Insert: {
+          confidence_score?: number | null
+          created_at?: string
+          expires_at?: string | null
+          generated_at?: string
+          generated_data: Json
+          id?: string
+          insight_type: string
+          patient_id: string
+          updated_at?: string
+        }
+        Update: {
+          confidence_score?: number | null
+          created_at?: string
+          expires_at?: string | null
+          generated_at?: string
+          generated_data?: Json
+          id?: string
+          insight_type?: string
+          patient_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       biomarker_activity: {
         Row: {
           active_calories: number | null
@@ -890,6 +926,51 @@ export type Database = {
           },
         ]
       }
+      health_reports: {
+        Row: {
+          created_at: string
+          file_path: string | null
+          file_size: number | null
+          generated_at: string
+          id: string
+          page_count: number | null
+          patient_id: string
+          report_data: Json
+          report_type: string
+          shared_with: string[] | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          file_path?: string | null
+          file_size?: number | null
+          generated_at?: string
+          id?: string
+          page_count?: number | null
+          patient_id: string
+          report_data: Json
+          report_type: string
+          shared_with?: string[] | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          file_path?: string | null
+          file_size?: number | null
+          generated_at?: string
+          id?: string
+          page_count?: number | null
+          patient_id?: string
+          report_data?: Json
+          report_type?: string
+          shared_with?: string[] | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       patients: {
         Row: {
           address_line1: string | null
@@ -1028,6 +1109,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_feedback: {
+        Row: {
+          comments: string | null
+          created_at: string
+          feedback_type: string
+          id: string
+          insight_id: string | null
+          patient_id: string
+          rating: number | null
+        }
+        Insert: {
+          comments?: string | null
+          created_at?: string
+          feedback_type: string
+          id?: string
+          insight_id?: string | null
+          patient_id: string
+          rating?: number | null
+        }
+        Update: {
+          comments?: string | null
+          created_at?: string
+          feedback_type?: string
+          id?: string
+          insight_id?: string | null
+          patient_id?: string
+          rating?: number | null
+        }
+        Relationships: []
       }
     }
     Views: {

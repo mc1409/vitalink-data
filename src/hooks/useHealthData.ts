@@ -125,22 +125,49 @@ export const useHealthData = (patientId: string | null) => {
           ? Math.floor((new Date().getTime() - new Date(labResponse.data[0].collection_date).getTime()) / (1000 * 60 * 60 * 24))
           : null;
 
-        // Fetch AI-generated health score
+        // Fetch AI-generated health score with caching
         let healthScore = null;
         let riskLevel: 'low' | 'medium' | 'high' | null = null;
         
         try {
-          const { data: scoreData } = await supabase.functions.invoke('health-score-calculator', {
-            body: { patientId }
-          });
-          
-          if (scoreData?.healthScore) {
-            healthScore = Math.round(scoreData.healthScore.overallScore);
-            // Determine risk level based on health score
-            if (healthScore >= 80) riskLevel = 'low';
-            else if (healthScore >= 60) riskLevel = 'medium';
-            else riskLevel = 'high';
+          // Check cache first
+          const { data: cachedScore } = await supabase
+            .from('ai_insights_cache')
+            .select('generated_data, generated_at')
+            .eq('patient_id', patientId)
+            .eq('insight_type', 'health-score')
+            .gte('expires_at', new Date().toISOString())
+            .order('generated_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (cachedScore && typeof cachedScore.generated_data === 'object' && cachedScore.generated_data !== null) {
+            healthScore = (cachedScore.generated_data as any).overallScore;
+          } else {
+            // Generate new score
+            const { data: scoreData } = await supabase.functions.invoke('health-score-calculator', {
+              body: { patientId }
+            });
+            
+            if (scoreData?.healthScore) {
+              healthScore = Math.round(scoreData.healthScore.overallScore);
+              
+              // Cache the result for 1 hour
+              await supabase
+                .from('ai_insights_cache')
+                .insert({
+                  patient_id: patientId,
+                  insight_type: 'health-score',
+                  generated_data: scoreData.healthScore,
+                  expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString()
+                });
+            }
           }
+          
+          // Determine risk level
+          if (healthScore >= 80) riskLevel = 'low';
+          else if (healthScore >= 60) riskLevel = 'medium';
+          else riskLevel = 'high';
         } catch (scoreError) {
           console.warn('Health score calculation failed:', scoreError);
         }
