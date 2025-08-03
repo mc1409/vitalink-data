@@ -285,7 +285,7 @@ const EnhancedSystemsMatrix: React.FC<EnhancedSystemsMatrixProps> = ({ patientId
                   <TooltipContent className="max-w-sm">
                     <p className="text-sm">
                       These correlations show how different health metrics in your body influence each other. 
-                      Strong correlations (>70%) indicate significant relationships worth monitoring.
+                      Strong correlations ({'>'} 70%) indicate significant relationships worth monitoring.
                     </p>
                   </TooltipContent>
                 </Tooltip>
@@ -399,7 +399,7 @@ const EnhancedSystemsMatrix: React.FC<EnhancedSystemsMatrixProps> = ({ patientId
                   </TooltipTrigger>
                   <TooltipContent className="max-w-sm">
                     <p className="text-sm">
-                      Correlates sleep quality with daily activity levels. Good sleep (>80% efficiency) 
+                      Correlates sleep quality with daily activity levels. Good sleep ({'>'} 80% efficiency) 
                       should support consistent activity. Poor sleep often leads to reduced activity.
                     </p>
                   </TooltipContent>
@@ -442,7 +442,7 @@ const EnhancedSystemsMatrix: React.FC<EnhancedSystemsMatrixProps> = ({ patientId
                 </LineChart>
               </ResponsiveContainer>
               <div className="mt-3 text-xs text-muted-foreground">
-                <p><strong>Interpretation:</strong> Sleep efficiency >80% (blue) should correlate with consistent activity levels >6,000 steps (green). Declining sleep often predicts reduced activity days.</p>
+                <p><strong>Interpretation:</strong> Sleep efficiency {'>'} 80% (blue) should correlate with consistent activity levels {'>'} 6,000 steps (green). Declining sleep often predicts reduced activity days.</p>
               </div>
             </CardContent>
           </Card>
