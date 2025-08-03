@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { usePatient } from "@/contexts/PatientContext";
+import { supabase } from "@/integrations/supabase/client";
 
 const HealthReports = () => {
   const { primaryPatient } = usePatient();
@@ -50,12 +51,27 @@ const HealthReports = () => {
   };
 
   const handleGenerateReport = async () => {
+    if (!primaryPatient?.id) return;
+    
     setIsGenerating(true);
-    // Simulate report generation
-    setTimeout(() => {
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-health-report', {
+        body: { 
+          patientId: primaryPatient.id,
+          reportType: selectedPeriod 
+        }
+      });
+      
+      if (error) throw error;
+      
+      console.log('Generated report:', data);
+      // TODO: Save report to database and refresh list
+      
+    } catch (error) {
+      console.error('Error generating report:', error);
+    } finally {
       setIsGenerating(false);
-      // In real implementation, this would call the generate-health-report Edge Function
-    }, 3000);
+    }
   };
 
   return (

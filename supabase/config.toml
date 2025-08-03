@@ -1,1 +1,7 @@
 project_id = "ztkhgckgylfkcixgxikf"
+
+[functions.generate-health-report]
+verify_jwt = true
+
+[functions.correlation-analyzer] 
+verify_jwt = true
