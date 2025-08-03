@@ -222,6 +222,8 @@ const HealthKitSyncPatientCentric: React.FC<HealthKitSyncPatientCentricProps> = 
           distance_walked_meters: data.distance * 1000,
           total_calories: data.totalCalories,
           active_calories: data.activeCalories
+        }, {
+          onConflict: 'patient_id,measurement_date,data_source'
         });
 
         // Insert heart data
@@ -232,6 +234,8 @@ const HealthKitSyncPatientCentric: React.FC<HealthKitSyncPatientCentricProps> = 
           device_type: 'iPhone',
           average_heart_rate: data.heartRate,
           resting_heart_rate: data.heartRate - 10
+        }, {
+          onConflict: 'patient_id,measurement_time,data_source'
         });
 
         // Insert sleep data
@@ -243,6 +247,8 @@ const HealthKitSyncPatientCentric: React.FC<HealthKitSyncPatientCentricProps> = 
           device_type: 'iPhone',
           total_sleep_time: Math.floor(data.sleepHours * 60),
           sleep_efficiency: 0.85
+        }, {
+          onConflict: 'patient_id,sleep_date,data_source'
         });
 
         successCount++;

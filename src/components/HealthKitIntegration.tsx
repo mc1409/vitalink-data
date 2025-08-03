@@ -133,6 +133,8 @@ const HealthKitIntegration: React.FC<HealthKitIntegrationProps> = ({ patientId }
           distance_walked_meters: Math.round(healthData.distance * 1000),
           total_calories: healthData.totalCalories,
           active_calories: healthData.activeCalories
+        }, {
+          onConflict: 'patient_id,measurement_date,data_source'
         });
         
         if (error) {
@@ -152,6 +154,8 @@ const HealthKitIntegration: React.FC<HealthKitIntegrationProps> = ({ patientId }
           device_type: 'iPhone',
           average_heart_rate: healthData.heartRate,
           resting_heart_rate: Math.max(30, healthData.heartRate - 15)
+        }, {
+          onConflict: 'patient_id,measurement_time,data_source'
         });
         
         if (error) {
@@ -172,6 +176,8 @@ const HealthKitIntegration: React.FC<HealthKitIntegrationProps> = ({ patientId }
           device_type: 'iPhone',
           total_sleep_time: Math.round(healthData.sleepHours * 60),
           sleep_efficiency: 85 // Default efficiency
+        }, {
+          onConflict: 'patient_id,sleep_date,data_source'
         });
         
         if (error) {
