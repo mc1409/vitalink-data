@@ -9,16 +9,19 @@ let CapacitorHealthkit: any = null;
 const loadHealthKit = async () => {
   if (typeof window !== 'undefined' && Capacitor.isNativePlatform()) {
     try {
+      console.log('🔄 Attempting to load HealthKit plugin...');
       // Use eval to prevent Vite from analyzing this import at build time
       const modulePath = '@perfood/capacitor-healthkit';
       const module = await (new Function('return import("' + modulePath + '")')());
       CapacitorHealthkit = module.CapacitorHealthkit;
+      console.log('✅ HealthKit plugin loaded successfully');
       return true;
     } catch (error) {
-      console.warn('HealthKit plugin not available');
+      console.warn('❌ HealthKit plugin not available:', error);
       return false;
     }
   }
+  console.log('⏭️ Not attempting to load HealthKit - not in native environment');
   return false;
 };
 
@@ -51,13 +54,17 @@ export const useHealthKit = (): HealthKitHook => {
     // Check if HealthKit is available (iOS native only)
     const isNative = Capacitor.isNativePlatform();
     const platform = Capacitor.getPlatform();
-    const available = isNative && platform === 'ios';
+    const platformAvailable = isNative && platform === 'ios';
     
-    if (available) {
-      await loadHealthKit();
+    console.log('🔍 HealthKit Platform Check:', { isNative, platform, platformAvailable });
+    
+    if (platformAvailable) {
+      const pluginLoaded = await loadHealthKit();
+      console.log('🔍 HealthKit Plugin Loaded:', pluginLoaded);
+      setIsAvailable(pluginLoaded);
+    } else {
+      setIsAvailable(false);
     }
-    
-    setIsAvailable(available);
   };
 
   const checkConnectionStatus = () => {
@@ -135,25 +142,32 @@ export const useHealthKit = (): HealthKitHook => {
   };
 
   const autoConnect = async (): Promise<void> => {
+    console.log('🔄 AutoConnect started - isAvailable:', isAvailable);
+    
     if (!isAvailable) {
       throw new Error('HealthKit is not available on this device');
     }
 
     // Check if already connected
     if (isConnected) {
+      console.log('✅ Already connected to HealthKit');
       return;
     }
 
     // Ensure HealthKit is loaded
     if (!CapacitorHealthkit) {
+      console.log('🔄 Loading HealthKit plugin...');
       const loaded = await loadHealthKit();
       if (!loaded) {
         throw new Error('Failed to load HealthKit plugin');
       }
+      console.log('✅ HealthKit plugin loaded successfully');
     }
 
     setIsLoading(true);
     try {
+      console.log('🔄 Requesting HealthKit permissions...');
+      
       // Request permissions for various health data types
       const permissions = {
         all: [
@@ -185,14 +199,18 @@ export const useHealthKit = (): HealthKitHook => {
         write: []
       };
 
-      await CapacitorHealthkit.requestAuthorization(permissions);
+      const result = await CapacitorHealthkit.requestAuthorization(permissions);
+      console.log('✅ HealthKit permissions result:', result);
       
       localStorage.setItem('healthkit_connected', 'true');
       setIsConnected(true);
+      console.log('✅ HealthKit auto-connect completed successfully');
       
     } catch (error) {
-      console.error('HealthKit auto-connection failed:', error);
-      throw error;
+      console.error('❌ HealthKit auto-connection failed:', error);
+      // Provide more specific error information
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error during HealthKit connection';
+      throw new Error(errorMessage);
     } finally {
       setIsLoading(false);
     }
