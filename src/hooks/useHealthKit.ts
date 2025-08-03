@@ -4,16 +4,21 @@ import { useToast } from '@/hooks/use-toast';
 
 // Conditional import for HealthKit to avoid build issues on web
 let CapacitorHealthkit: any = null;
-if (typeof window !== 'undefined' && Capacitor.isNativePlatform()) {
-  try {
-    // Dynamic import to avoid build issues
-    import('@perfood/capacitor-healthkit').then(module => {
+
+// Only attempt to load HealthKit in native environment
+const loadHealthKit = async () => {
+  if (typeof window !== 'undefined' && Capacitor.isNativePlatform()) {
+    try {
+      const module = await import('@perfood/capacitor-healthkit');
       CapacitorHealthkit = module.CapacitorHealthkit;
-    });
-  } catch (error) {
-    console.warn('HealthKit plugin not available');
+      return true;
+    } catch (error) {
+      console.warn('HealthKit plugin not available');
+      return false;
+    }
   }
-}
+  return false;
+};
 
 interface HealthKitHook {
   isAvailable: boolean;
@@ -31,15 +36,23 @@ export const useHealthKit = (): HealthKitHook => {
   const { toast } = useToast();
 
   useEffect(() => {
-    checkAvailability();
-    checkConnectionStatus();
+    const initializeHealthKit = async () => {
+      await checkAvailability();
+      checkConnectionStatus();
+    };
+    initializeHealthKit();
   }, []);
 
-  const checkAvailability = () => {
+  const checkAvailability = async () => {
     // Check if HealthKit is available (iOS native only)
     const isNative = Capacitor.isNativePlatform();
     const platform = Capacitor.getPlatform();
     const available = isNative && platform === 'ios';
+    
+    if (available) {
+      await loadHealthKit();
+    }
+    
     setIsAvailable(available);
   };
 
@@ -49,8 +62,16 @@ export const useHealthKit = (): HealthKitHook => {
   };
 
   const connect = async (): Promise<void> => {
-    if (!isAvailable || !CapacitorHealthkit) {
+    if (!isAvailable) {
       throw new Error('HealthKit is not available on this device');
+    }
+
+    // Ensure HealthKit is loaded
+    if (!CapacitorHealthkit) {
+      const loaded = await loadHealthKit();
+      if (!loaded) {
+        throw new Error('Failed to load HealthKit plugin');
+      }
     }
 
     setIsLoading(true);
@@ -121,8 +142,16 @@ export const useHealthKit = (): HealthKitHook => {
   };
 
   const syncData = async (): Promise<any> => {
-    if (!isConnected || !CapacitorHealthkit) {
-      throw new Error('Not connected to HealthKit or HealthKit not available');
+    if (!isConnected) {
+      throw new Error('Not connected to HealthKit');
+    }
+
+    // Ensure HealthKit is loaded
+    if (!CapacitorHealthkit) {
+      const loaded = await loadHealthKit();
+      if (!loaded) {
+        throw new Error('HealthKit plugin not available');
+      }
     }
 
     setIsLoading(true);
