@@ -6,7 +6,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/components/AuthProvider";
 import { PatientProvider } from "@/contexts/PatientContext";
-import { useAppInitialization } from "@/hooks/useAppInitialization";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
@@ -23,24 +22,6 @@ const queryClient = new QueryClient({
   },
 });
 
-// App initialization component that runs inside providers
-const AppWithInitialization = () => {
-  // Initialize app startup tasks (including HealthKit on iOS)
-  useAppInitialization();
-  
-  return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Index />} />
-        <Route path="/auth" element={<Auth />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/patient-dashboard" element={<PatientDashboard />} />
-        <Route path="*" element={<NotFound />} />
-      </Routes>
-    </BrowserRouter>
-  );
-};
-
 const App = () => {
 
   return (
@@ -50,7 +31,15 @@ const App = () => {
           <TooltipProvider>
             <Toaster />
             <Sonner />
-            <AppWithInitialization />
+            <BrowserRouter>
+              <Routes>
+                <Route path="/" element={<Index />} />
+                <Route path="/auth" element={<Auth />} />
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/patient-dashboard" element={<PatientDashboard />} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </BrowserRouter>
           </TooltipProvider>
         </PatientProvider>
       </AuthProvider>

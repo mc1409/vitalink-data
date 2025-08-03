@@ -9,19 +9,16 @@ let CapacitorHealthkit: any = null;
 const loadHealthKit = async () => {
   if (typeof window !== 'undefined' && Capacitor.isNativePlatform()) {
     try {
-      console.log('🔄 Attempting to load HealthKit plugin...');
       // Use eval to prevent Vite from analyzing this import at build time
       const modulePath = '@perfood/capacitor-healthkit';
       const module = await (new Function('return import("' + modulePath + '")')());
       CapacitorHealthkit = module.CapacitorHealthkit;
-      console.log('✅ HealthKit plugin loaded successfully');
       return true;
     } catch (error) {
-      console.warn('❌ HealthKit plugin not available:', error);
+      console.warn('HealthKit plugin not available');
       return false;
     }
   }
-  console.log('⏭️ Not attempting to load HealthKit - not in native environment');
   return false;
 };
 
@@ -30,10 +27,8 @@ interface HealthKitHook {
   isConnected: boolean;
   isLoading: boolean;
   connect: () => Promise<void>;
-  autoConnect: () => Promise<void>;
   disconnect: () => void;
   syncData: () => Promise<any>;
-  autoSync: () => Promise<any>;
 }
 
 export const useHealthKit = (): HealthKitHook => {
@@ -54,17 +49,13 @@ export const useHealthKit = (): HealthKitHook => {
     // Check if HealthKit is available (iOS native only)
     const isNative = Capacitor.isNativePlatform();
     const platform = Capacitor.getPlatform();
-    const platformAvailable = isNative && platform === 'ios';
+    const available = isNative && platform === 'ios';
     
-    console.log('🔍 HealthKit Platform Check:', { isNative, platform, platformAvailable });
-    
-    if (platformAvailable) {
-      const pluginLoaded = await loadHealthKit();
-      console.log('🔍 HealthKit Plugin Loaded:', pluginLoaded);
-      setIsAvailable(pluginLoaded);
-    } else {
-      setIsAvailable(false);
+    if (available) {
+      await loadHealthKit();
     }
+    
+    setIsAvailable(available);
   };
 
   const checkConnectionStatus = () => {
@@ -136,81 +127,6 @@ export const useHealthKit = (): HealthKitHook => {
         variant: "destructive"
       });
       throw error;
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const autoConnect = async (): Promise<void> => {
-    console.log('🔄 AutoConnect started - isAvailable:', isAvailable);
-    
-    if (!isAvailable) {
-      throw new Error('HealthKit is not available on this device');
-    }
-
-    // Check if already connected
-    if (isConnected) {
-      console.log('✅ Already connected to HealthKit');
-      return;
-    }
-
-    // Ensure HealthKit is loaded
-    if (!CapacitorHealthkit) {
-      console.log('🔄 Loading HealthKit plugin...');
-      const loaded = await loadHealthKit();
-      if (!loaded) {
-        throw new Error('Failed to load HealthKit plugin');
-      }
-      console.log('✅ HealthKit plugin loaded successfully');
-    }
-
-    setIsLoading(true);
-    try {
-      console.log('🔄 Requesting HealthKit permissions...');
-      
-      // Request permissions for various health data types
-      const permissions = {
-        all: [
-          'stepCount',
-          'distanceWalkingRunning', 
-          'activeEnergyBurned',
-          'basalEnergyBurned',
-          'heartRate',
-          'restingHeartRate',
-          'walkingHeartRateAverage',
-          'heartRateVariabilitySDNN',
-          'sleepAnalysis',
-          'bodyMass',
-          'bodyFatPercentage'
-        ],
-        read: [
-          'stepCount',
-          'distanceWalkingRunning', 
-          'activeEnergyBurned',
-          'basalEnergyBurned',
-          'heartRate',
-          'restingHeartRate',
-          'walkingHeartRateAverage',
-          'heartRateVariabilitySDNN',
-          'sleepAnalysis',
-          'bodyMass',
-          'bodyFatPercentage'
-        ],
-        write: []
-      };
-
-      const result = await CapacitorHealthkit.requestAuthorization(permissions);
-      console.log('✅ HealthKit permissions result:', result);
-      
-      localStorage.setItem('healthkit_connected', 'true');
-      setIsConnected(true);
-      console.log('✅ HealthKit auto-connect completed successfully');
-      
-    } catch (error) {
-      console.error('❌ HealthKit auto-connection failed:', error);
-      // Provide more specific error information
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error during HealthKit connection';
-      throw new Error(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -367,144 +283,12 @@ export const useHealthKit = (): HealthKitHook => {
     }
   };
 
-  const autoSync = async (): Promise<any> => {
-    if (!isConnected) {
-      throw new Error('Not connected to HealthKit');
-    }
-
-    // Ensure HealthKit is loaded
-    if (!CapacitorHealthkit) {
-      const loaded = await loadHealthKit();
-      if (!loaded) {
-        throw new Error('HealthKit plugin not available');
-      }
-    }
-
-    setIsLoading(true);
-    try {
-      const today = new Date();
-      const startDate = new Date(today.getTime() - 24 * 60 * 60 * 1000); // Last 24 hours
-      
-      // Fetch real HealthKit data (same logic as syncData but without toast notifications)
-      const [
-        stepsResult,
-        distanceResult,
-        activeCaloriesResult,
-        basalCaloriesResult,
-        heartRateResult,
-        sleepResult,
-        weightResult,
-        bodyFatResult
-      ] = await Promise.allSettled([
-        CapacitorHealthkit.queryHKitSampleType({
-          sampleName: 'stepCount',
-          startDate: startDate.toISOString(),
-          endDate: today.toISOString(),
-          limit: 100
-        }),
-        CapacitorHealthkit.queryHKitSampleType({
-          sampleName: 'distanceWalkingRunning',
-          startDate: startDate.toISOString(),
-          endDate: today.toISOString(),
-          limit: 100
-        }),
-        CapacitorHealthkit.queryHKitSampleType({
-          sampleName: 'activeEnergyBurned',
-          startDate: startDate.toISOString(),
-          endDate: today.toISOString(),
-          limit: 100
-        }),
-        CapacitorHealthkit.queryHKitSampleType({
-          sampleName: 'basalEnergyBurned',
-          startDate: startDate.toISOString(),
-          endDate: today.toISOString(),
-          limit: 100
-        }),
-        CapacitorHealthkit.queryHKitSampleType({
-          sampleName: 'heartRate',
-          startDate: startDate.toISOString(),
-          endDate: today.toISOString(),
-          limit: 100
-        }),
-        CapacitorHealthkit.queryHKitSampleType({
-          sampleName: 'sleepAnalysis',
-          startDate: startDate.toISOString(),
-          endDate: today.toISOString(),
-          limit: 10
-        }),
-        CapacitorHealthkit.queryHKitSampleType({
-          sampleName: 'bodyMass',
-          startDate: startDate.toISOString(),
-          endDate: today.toISOString(),
-          limit: 1
-        }),
-        CapacitorHealthkit.queryHKitSampleType({
-          sampleName: 'bodyFatPercentage',
-          startDate: startDate.toISOString(),
-          endDate: today.toISOString(),
-          limit: 1
-        })
-      ]);
-
-      // Process the results with proper type safety
-      const healthData = {
-        steps: stepsResult.status === 'fulfilled' && (stepsResult.value as any)?.resultData?.length > 0 
-          ? (stepsResult.value as any).resultData.reduce((sum: number, item: any) => sum + (Number(item.value) || 0), 0) 
-          : 0,
-        distance: distanceResult.status === 'fulfilled' && (distanceResult.value as any)?.resultData?.length > 0
-          ? Math.round((distanceResult.value as any).resultData.reduce((sum: number, item: any) => sum + (Number(item.value) || 0), 0) / 1000 * 100) / 100
-          : 0,
-        activeCalories: activeCaloriesResult.status === 'fulfilled' && (activeCaloriesResult.value as any)?.resultData?.length > 0
-          ? Math.round((activeCaloriesResult.value as any).resultData.reduce((sum: number, item: any) => sum + (Number(item.value) || 0), 0))
-          : 0,
-        totalCalories: 0, // Will be calculated from active + basal
-        heartRate: heartRateResult.status === 'fulfilled' && (heartRateResult.value as any)?.resultData?.length > 0
-          ? Math.round((heartRateResult.value as any).resultData.reduce((sum: number, item: any) => sum + (Number(item.value) || 0), 0) / (heartRateResult.value as any).resultData.length)
-          : 0,
-        sleepHours: sleepResult.status === 'fulfilled' && (sleepResult.value as any)?.resultData?.length > 0
-          ? Math.round((sleepResult.value as any).resultData.reduce((sum: number, item: any) => {
-              const start = new Date(item.startDate);
-              const end = new Date(item.endDate);
-              return sum + (end.getTime() - start.getTime()) / (1000 * 60 * 60);
-            }, 0) * 10) / 10
-          : 0,
-        weight: weightResult.status === 'fulfilled' && (weightResult.value as any)?.resultData?.length > 0
-          ? Math.round(Number((weightResult.value as any).resultData[0].value) * 10) / 10
-          : undefined,
-        bodyFat: bodyFatResult.status === 'fulfilled' && (bodyFatResult.value as any)?.resultData?.length > 0
-          ? Math.round(Number((bodyFatResult.value as any).resultData[0].value) * 100 * 10) / 10
-          : undefined,
-        timestamp: new Date().toISOString()
-      };
-
-      // Calculate total calories
-      const basalCalories = basalCaloriesResult.status === 'fulfilled' && (basalCaloriesResult.value as any)?.resultData?.length > 0
-        ? Math.round((basalCaloriesResult.value as any).resultData.reduce((sum: number, item: any) => sum + (Number(item.value) || 0), 0))
-        : 0;
-      
-      healthData.totalCalories = healthData.activeCalories + basalCalories;
-      
-      // Update last sync time
-      localStorage.setItem('healthkit_last_sync', new Date().toLocaleString());
-      
-      return healthData;
-      
-    } catch (error) {
-      console.error('HealthKit auto-sync failed:', error);
-      throw error;
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   return {
     isAvailable,
     isConnected,
     isLoading,
     connect,
-    autoConnect,
     disconnect,
-    syncData,
-    autoSync
+    syncData
   };
 };
