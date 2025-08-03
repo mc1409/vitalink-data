@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Heart } from 'lucide-react';
 import PatientSelector from '@/components/PatientSelector';
 import HealthIntelligenceDashboard from '@/components/HealthIntelligenceDashboard';
+import EnhancedHealthIntelligenceDashboard from '@/components/EnhancedHealthIntelligenceDashboard';
 import { usePatient } from '@/contexts/PatientContext';
 
 const PatientDashboard = () => {
@@ -40,17 +41,17 @@ const PatientDashboard = () => {
         onPatientSelect={() => {}} 
       />
 
-      {/* Health Intelligence Dashboard - Single Rolling Page */}
+      {/* Enhanced Health Intelligence Dashboard - Single Rolling Page with Full Explanations */}
       {primaryPatient?.id ? (
-        <HealthIntelligenceDashboard 
+        <EnhancedHealthIntelligenceDashboard 
           patientId={primaryPatient.id} 
           patientName={`${primaryPatient.first_name} ${primaryPatient.last_name}`}
         />
       ) : (
         <Card>
           <CardHeader>
-            <CardTitle>Health Intelligence Dashboard</CardTitle>
-            <CardDescription>Please select a patient to view comprehensive health analytics</CardDescription>
+            <CardTitle>AI-Powered Health Intelligence Dashboard</CardTitle>
+            <CardDescription>Please select a patient to view comprehensive health analytics with detailed explanations</CardDescription>
           </CardHeader>
         </Card>
       )}
