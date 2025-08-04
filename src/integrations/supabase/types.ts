@@ -1206,6 +1206,99 @@ export type Database = {
         }
         Relationships: []
       }
+      user_patients: {
+        Row: {
+          address_line1: string | null
+          address_line2: string | null
+          city: string | null
+          country: string | null
+          created_at: string
+          date_of_birth: string
+          display_name: string | null
+          email: string | null
+          emergency_contact_name: string | null
+          emergency_contact_phone: string | null
+          emergency_contact_relationship: string | null
+          first_name: string
+          gender: string | null
+          id: string
+          insurance_group_number: string | null
+          insurance_policy_number: string | null
+          insurance_provider: string | null
+          is_primary: boolean | null
+          last_name: string
+          medical_record_number: string | null
+          phone_primary: string | null
+          phone_secondary: string | null
+          primary_care_physician: string | null
+          race_ethnicity: string | null
+          state: string | null
+          updated_at: string
+          user_id: string
+          zip_code: string | null
+        }
+        Insert: {
+          address_line1?: string | null
+          address_line2?: string | null
+          city?: string | null
+          country?: string | null
+          created_at?: string
+          date_of_birth: string
+          display_name?: string | null
+          email?: string | null
+          emergency_contact_name?: string | null
+          emergency_contact_phone?: string | null
+          emergency_contact_relationship?: string | null
+          first_name: string
+          gender?: string | null
+          id?: string
+          insurance_group_number?: string | null
+          insurance_policy_number?: string | null
+          insurance_provider?: string | null
+          is_primary?: boolean | null
+          last_name: string
+          medical_record_number?: string | null
+          phone_primary?: string | null
+          phone_secondary?: string | null
+          primary_care_physician?: string | null
+          race_ethnicity?: string | null
+          state?: string | null
+          updated_at?: string
+          user_id: string
+          zip_code?: string | null
+        }
+        Update: {
+          address_line1?: string | null
+          address_line2?: string | null
+          city?: string | null
+          country?: string | null
+          created_at?: string
+          date_of_birth?: string
+          display_name?: string | null
+          email?: string | null
+          emergency_contact_name?: string | null
+          emergency_contact_phone?: string | null
+          emergency_contact_relationship?: string | null
+          first_name?: string
+          gender?: string | null
+          id?: string
+          insurance_group_number?: string | null
+          insurance_policy_number?: string | null
+          insurance_provider?: string | null
+          is_primary?: boolean | null
+          last_name?: string
+          medical_record_number?: string | null
+          phone_primary?: string | null
+          phone_secondary?: string | null
+          primary_care_physician?: string | null
+          race_ethnicity?: string | null
+          state?: string | null
+          updated_at?: string
+          user_id?: string
+          zip_code?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
