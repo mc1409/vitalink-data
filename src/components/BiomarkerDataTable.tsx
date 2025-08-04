@@ -48,40 +48,57 @@ const BiomarkerDataTable: React.FC<BiomarkerDataTableProps> = ({ patientId }) =>
           .select('*')
           .eq('patient_id', patientId)
           .order('measurement_time', { ascending: false })
-          .limit(50),
+          .limit(100),
         
         supabase
           .from('biomarker_sleep')
           .select('*')
           .eq('patient_id', patientId)
           .order('measurement_time', { ascending: false })
-          .limit(50),
+          .limit(100),
         
         supabase
           .from('biomarker_activity')
           .select('*')
           .eq('patient_id', patientId)
           .order('measurement_time', { ascending: false })
-          .limit(50),
+          .limit(100),
         
         supabase
           .from('biomarker_nutrition')
           .select('*')
           .eq('patient_id', patientId)
           .order('measurement_time', { ascending: false })
-          .limit(50),
+          .limit(100),
         
         supabase
           .from('biomarker_biological_genetic_microbiome')
           .select('*')
           .eq('patient_id', patientId)
           .order('measurement_time', { ascending: false })
-          .limit(50)
+          .limit(100)
       ]);
+
+      // Debug logging to see what data we have
+      console.log('🔍 BIOMARKER DATA FETCH RESULTS:', {
+        heart: heartData.data?.length || 0,
+        sleep: sleepData.data?.length || 0,
+        activity: activityData.data?.length || 0,
+        nutrition: nutritionData.data?.length || 0,
+        advanced: advancedData.data?.length || 0,
+        heartSample: heartData.data?.[0],
+        errors: {
+          heart: heartData.error,
+          sleep: sleepData.error,
+          activity: activityData.error,
+          nutrition: nutritionData.error,
+          advanced: advancedData.error
+        }
+      });
 
       const combinedData: BiomarkerData[] = [];
 
-      // Process Heart Data
+      // Process Heart Data - Extract ALL available metrics
       heartData.data?.forEach(item => {
         if (item.resting_heart_rate) {
           combinedData.push({
@@ -109,6 +126,54 @@ const BiomarkerDataTable: React.FC<BiomarkerDataTableProps> = ({ patientId }) =>
             status: getHrvStatus(item.hrv_rmssd)
           });
         }
+        if (item.hrv_sdnn) {
+          combinedData.push({
+            id: `heart-sdnn-${item.id}`,
+            category: 'Heart',
+            metric_name: 'HRV (SDNN)',
+            value: Math.round(item.hrv_sdnn * 10) / 10,
+            unit: 'ms',
+            measurement_time: item.measurement_time,
+            data_source: item.data_source,
+            device_type: item.device_type
+          });
+        }
+        if (item.walking_heart_rate) {
+          combinedData.push({
+            id: `heart-walking-${item.id}`,
+            category: 'Heart',
+            metric_name: 'Walking Heart Rate',
+            value: item.walking_heart_rate,
+            unit: 'bpm',
+            measurement_time: item.measurement_time,
+            data_source: item.data_source,
+            device_type: item.device_type
+          });
+        }
+        if (item.max_heart_rate) {
+          combinedData.push({
+            id: `heart-max-${item.id}`,
+            category: 'Heart',
+            metric_name: 'Max Heart Rate',
+            value: item.max_heart_rate,
+            unit: 'bpm',
+            measurement_time: item.measurement_time,
+            data_source: item.data_source,
+            device_type: item.device_type
+          });
+        }
+        if (item.vo2_max) {
+          combinedData.push({
+            id: `heart-vo2-${item.id}`,
+            category: 'Heart',
+            metric_name: 'VO2 Max',
+            value: Math.round(item.vo2_max * 10) / 10,
+            unit: 'ml/kg/min',
+            measurement_time: item.measurement_time,
+            data_source: item.data_source,
+            device_type: item.device_type
+          });
+        }
         if (item.systolic_bp && item.diastolic_bp) {
           combinedData.push({
             id: `heart-bp-${item.id}`,
@@ -124,7 +189,7 @@ const BiomarkerDataTable: React.FC<BiomarkerDataTableProps> = ({ patientId }) =>
         }
       });
 
-      // Process Sleep Data
+      // Process Sleep Data - Extract ALL available metrics
       sleepData.data?.forEach(item => {
         if (item.total_sleep_time) {
           combinedData.push({
@@ -164,9 +229,69 @@ const BiomarkerDataTable: React.FC<BiomarkerDataTableProps> = ({ patientId }) =>
             device_type: item.device_type
           });
         }
+        if (item.rem_sleep_minutes) {
+          combinedData.push({
+            id: `sleep-rem-${item.id}`,
+            category: 'Sleep',
+            metric_name: 'REM Sleep',
+            value: Math.round(item.rem_sleep_minutes),
+            unit: 'min',
+            measurement_time: item.measurement_time,
+            data_source: item.data_source,
+            device_type: item.device_type
+          });
+        }
+        if (item.light_sleep_minutes) {
+          combinedData.push({
+            id: `sleep-light-${item.id}`,
+            category: 'Sleep',
+            metric_name: 'Light Sleep',
+            value: Math.round(item.light_sleep_minutes),
+            unit: 'min',
+            measurement_time: item.measurement_time,
+            data_source: item.data_source,
+            device_type: item.device_type
+          });
+        }
+        if (item.sleep_score) {
+          combinedData.push({
+            id: `sleep-score-${item.id}`,
+            category: 'Sleep',
+            metric_name: 'Sleep Score',
+            value: item.sleep_score,
+            unit: '/100',
+            measurement_time: item.measurement_time,
+            data_source: item.data_source,
+            device_type: item.device_type
+          });
+        }
+        if (item.avg_heart_rate) {
+          combinedData.push({
+            id: `sleep-hr-${item.id}`,
+            category: 'Sleep',
+            metric_name: 'Avg Sleep HR',
+            value: item.avg_heart_rate,
+            unit: 'bpm',
+            measurement_time: item.measurement_time,
+            data_source: item.data_source,
+            device_type: item.device_type
+          });
+        }
+        if (item.avg_respiratory_rate) {
+          combinedData.push({
+            id: `sleep-resp-${item.id}`,
+            category: 'Sleep',
+            metric_name: 'Respiratory Rate',
+            value: Math.round(item.avg_respiratory_rate * 10) / 10,
+            unit: '/min',
+            measurement_time: item.measurement_time,
+            data_source: item.data_source,
+            device_type: item.device_type
+          });
+        }
       });
 
-      // Process Activity Data
+      // Process Activity Data - Extract ALL available metrics
       activityData.data?.forEach(item => {
         if (item.steps_count) {
           combinedData.push({
@@ -193,6 +318,18 @@ const BiomarkerDataTable: React.FC<BiomarkerDataTableProps> = ({ patientId }) =>
             device_type: item.device_type
           });
         }
+        if (item.active_calories) {
+          combinedData.push({
+            id: `activity-active-calories-${item.id}`,
+            category: 'Activity',
+            metric_name: 'Active Calories',
+            value: item.active_calories,
+            unit: 'kcal',
+            measurement_time: item.measurement_time,
+            data_source: item.data_source,
+            device_type: item.device_type
+          });
+        }
         if (item.exercise_minutes) {
           combinedData.push({
             id: `activity-exercise-${item.id}`,
@@ -200,6 +337,30 @@ const BiomarkerDataTable: React.FC<BiomarkerDataTableProps> = ({ patientId }) =>
             metric_name: 'Exercise Minutes',
             value: item.exercise_minutes,
             unit: 'min',
+            measurement_time: item.measurement_time,
+            data_source: item.data_source,
+            device_type: item.device_type
+          });
+        }
+        if (item.distance_walked_meters) {
+          combinedData.push({
+            id: `activity-walk-distance-${item.id}`,
+            category: 'Activity',
+            metric_name: 'Walking Distance',
+            value: Math.round(item.distance_walked_meters / 1000 * 100) / 100,
+            unit: 'km',
+            measurement_time: item.measurement_time,
+            data_source: item.data_source,
+            device_type: item.device_type
+          });
+        }
+        if (item.flights_climbed) {
+          combinedData.push({
+            id: `activity-flights-${item.id}`,
+            category: 'Activity',
+            metric_name: 'Flights Climbed',
+            value: item.flights_climbed,
+            unit: 'flights',
             measurement_time: item.measurement_time,
             data_source: item.data_source,
             device_type: item.device_type
@@ -283,6 +444,17 @@ const BiomarkerDataTable: React.FC<BiomarkerDataTableProps> = ({ patientId }) =>
       });
 
       setBiomarkerData(combinedData);
+      console.log('📊 COMBINED BIOMARKER DATA:', {
+        totalEntries: combinedData.length,
+        byCategory: {
+          Heart: combinedData.filter(d => d.category === 'Heart').length,
+          Sleep: combinedData.filter(d => d.category === 'Sleep').length,
+          Activity: combinedData.filter(d => d.category === 'Activity').length,
+          Nutrition: combinedData.filter(d => d.category === 'Nutrition').length,
+          Advanced: combinedData.filter(d => d.category === 'Advanced').length,
+        },
+        sampleData: combinedData.slice(0, 3)
+      });
     } catch (err: any) {
       console.error('Error fetching biomarker data:', err);
       setError(err.message);
