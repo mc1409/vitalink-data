@@ -11,6 +11,7 @@ import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import PatientDashboard from "./pages/PatientDashboard";
 import RolesGPTHealth from "./pages/RolesGPTHealth";
+import SleepIntelligence from "./pages/SleepIntelligence";
 import HealthInsights from "./pages/HealthInsights";
 import HealthReports from "./pages/HealthReports";
 import NotFound from "./pages/NotFound";
@@ -41,6 +42,7 @@ const App = () => {
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/patient-dashboard" element={<PatientDashboard />} />
                 <Route path="/rolesgpt-health" element={<RolesGPTHealth />} />
+                <Route path="/sleep-intelligence" element={<SleepIntelligence />} />
                 <Route path="/health-insights" element={<HealthInsights />} />
                 <Route path="/health-reports" element={<HealthReports />} />
                 <Route path="*" element={<NotFound />} />

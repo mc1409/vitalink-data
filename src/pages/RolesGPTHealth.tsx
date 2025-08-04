@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { 
   Activity, Heart, Moon, Zap, TrendingUp, Brain, 
   BarChart3, Shield, Pill, Apple, Clock, Waves,
@@ -8,7 +9,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import WHOOPSleepAnalysis from "@/components/WHOOPSleepAnalysis";
 
 // Agent definitions with WHOOP-style metrics
 const healthAgents = [
@@ -22,7 +22,7 @@ const healthAgents = [
     color: '#00ff88',
     description: 'AI sleep analysis using biomarker patterns',
     metrics: { accuracy: 92, insights: 47, recommendations: 12 },
-    component: WHOOPSleepAnalysis
+    component: null
   },
   {
     id: 'heart-optimizer',
@@ -159,6 +159,7 @@ const healthAgents = [
 ];
 
 const RolesGPTHealth = () => {
+  const navigate = useNavigate();
   const [selectedAgent, setSelectedAgent] = useState(null);
 
   const getStatusColor = (status) => {
@@ -180,10 +181,18 @@ const RolesGPTHealth = () => {
     return colors[priority] || colors.low;
   };
 
+  const handleAgentClick = (agent) => {
+    if (agent.id === 'sleep-analysis') {
+      navigate('/sleep-intelligence');
+    } else {
+      setSelectedAgent(agent);
+    }
+  };
+
   const AgentCard = ({ agent }) => (
     <Card 
       className="bg-[#1a1a1a] border-gray-800 rounded-xl cursor-pointer hover:bg-[#222] transition-all duration-200 group"
-      onClick={() => setSelectedAgent(agent)}
+      onClick={() => handleAgentClick(agent)}
     >
       <CardContent className="p-4">
         <div className="flex items-center justify-between mb-3">
