@@ -13,12 +13,6 @@ interface SleepAnalysisRequest {
   force_refresh?: boolean;
 }
 
-interface AgentTask {
-  name: string;
-  description: string;
-  execute: (data: any) => Promise<any>;
-}
-
 class SleepAnalysisAgent {
   private supabase: any;
   private azureEndpoint: string;
@@ -33,162 +27,202 @@ class SleepAnalysisAgent {
     this.azureEndpoint = Deno.env.get('AZURE_OPENAI_ENDPOINT') ?? '';
     this.azureApiKey = Deno.env.get('AZURE_OPENAI_API_KEY') ?? '';
     this.azureDeployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT') ?? '';
+    
+    console.log('🔧 Azure OpenAI Config:', {
+      hasEndpoint: !!this.azureEndpoint,
+      hasApiKey: !!this.azureApiKey,
+      hasDeployment: !!this.azureDeployment,
+      endpoint: this.azureEndpoint ? 'configured' : 'missing'
+    });
   }
 
-  // CrewAI-style Agent: Data Analyst
-  private dataAnalystAgent: AgentTask = {
-    name: "Sleep Data Analyst",
-    description: "Aggregates and processes sleep biomarker data from multiple sources",
-    execute: async (patientId: string) => {
-      console.log(`🔍 Data Analyst Agent processing patient: ${patientId}`);
-      
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      
-      // Fetch all relevant biomarker data
-      const [sleepData, heartData, activityData, labData] = await Promise.all([
-        this.supabase
-          .from('biomarker_sleep')
-          .select('*')
-          .eq('patient_id', patientId)
-          .gte('sleep_date', thirtyDaysAgo.toISOString().split('T')[0])
-          .order('sleep_date', { ascending: false }),
-        
-        this.supabase
-          .from('biomarker_heart')
-          .select('*')
-          .eq('patient_id', patientId)
-          .gte('measurement_time', thirtyDaysAgo.toISOString())
-          .order('measurement_time', { ascending: false }),
-        
-        this.supabase
-          .from('biomarker_activity')
-          .select('*')
-          .eq('patient_id', patientId)
-          .gte('measurement_date', thirtyDaysAgo.toISOString().split('T')[0])
-          .order('measurement_date', { ascending: false }),
-        
-        this.supabase
-          .from('clinical_diagnostic_lab_tests')
-          .select('*')
-          .eq('patient_id', patientId)
-          .in('test_name', ['Cortisol', 'Melatonin', 'Vitamin D', 'Magnesium', 'Glucose'])
-          .gte('collection_date', thirtyDaysAgo.toISOString().split('T')[0])
-          .order('collection_date', { ascending: false })
-      ]);
-
-      return {
-        sleepData: sleepData.data || [],
-        heartData: heartData.data || [],
-        activityData: activityData.data || [],
-        labData: labData.data || [],
-        dataQuality: this.assessDataQuality(sleepData.data, heartData.data, activityData.data)
-      };
-    }
-  };
-
-  // CrewAI-style Agent: Pattern Recognition Specialist
-  private patternAnalystAgent: AgentTask = {
-    name: "Pattern Recognition Specialist",
-    description: "Identifies sleep patterns, trends, and correlations in biomarker data",
-    execute: async (aggregatedData: any) => {
-      console.log(`📊 Pattern Analyst Agent analyzing trends and correlations`);
-      
-      const { sleepData, heartData, activityData, labData } = aggregatedData;
-      
-      // Calculate sleep metrics
-      const sleepMetrics = this.calculateSleepMetrics(sleepData);
-      const correlations = this.findCorrelations(sleepData, heartData, activityData);
-      const trends = this.identifyTrends(sleepData);
-      const anomalies = this.detectAnomalies(sleepData);
-      
-      return {
-        sleepMetrics,
-        correlations,
-        trends,
-        anomalies,
-        riskFactors: this.identifyRiskFactors(sleepData, labData),
-        chronotype: this.determineChronotype(sleepData)
-      };
-    }
-  };
-
-  // CrewAI-style Agent: Health Advisory Specialist
-  private healthAdvisorAgent: AgentTask = {
-    name: "Health Advisory Specialist",
-    description: "Generates personalized sleep recommendations using LLM analysis",
-    execute: async (analysisData: any) => {
-      console.log(`💡 Health Advisor Agent generating recommendations`);
-      
-      const llmAnalysis = await this.generateLLMInsights(analysisData);
-      const recommendations = await this.generateRecommendations(analysisData, llmAnalysis);
-      const sleepScore = this.calculateSleepQualityScore(analysisData);
-      
-      return {
-        sleepQualityScore: sleepScore,
-        recommendations,
-        llmInsights: llmAnalysis,
-        optimalSchedule: this.calculateOptimalSchedule(analysisData),
-        keyFactors: this.identifyKeyFactors(analysisData)
-      };
-    }
-  };
-
-  // Main agent orchestration (CrewAI-style workflow)
   async executeSleepAnalysis(patientId: string, analysisPeriod: string = 'daily'): Promise<any> {
     const startTime = Date.now();
-    console.log(`🚀 Starting CrewAI Sleep Analysis for patient: ${patientId}`);
+    console.log(`🚀 Starting Sleep Analysis for patient: ${patientId}`);
     
     try {
-      // Step 1: Data Collection (Data Analyst Agent)
-      const aggregatedData = await this.dataAnalystAgent.execute(patientId);
+      // Step 1: Collect comprehensive biomarker data
+      console.log('📊 Step 1: Collecting biomarker data...');
+      const biomarkerData = await this.collectBiomarkerData(patientId);
       
-      // Step 2: Pattern Analysis (Pattern Recognition Agent)  
-      const patternAnalysis = await this.patternAnalystAgent.execute(aggregatedData);
+      if (biomarkerData.sleepData.length === 0) {
+        throw new Error('No sleep data found for this patient');
+      }
       
-      // Step 3: Health Advisory (Health Advisory Agent)
-      const healthInsights = await this.healthAdvisorAgent.execute({
-        ...aggregatedData,
-        ...patternAnalysis
-      });
+      console.log(`✅ Data collected: ${biomarkerData.sleepData.length} sleep records, ${biomarkerData.heartData.length} heart records`);
       
-      // Step 4: Store results
+      // Step 2: Analyze patterns and calculate metrics
+      console.log('🔍 Step 2: Analyzing patterns...');
+      const analysis = await this.analyzePatterns(biomarkerData);
+      
+      // Step 3: Generate AI insights (with fallback if Azure not configured)
+      console.log('🤖 Step 3: Generating AI insights...');
+      const insights = await this.generateInsights(analysis);
+      
+      // Step 4: Calculate comprehensive scores
+      console.log('📈 Step 4: Calculating scores...');
+      const scores = this.calculateScores(analysis);
+      
+      // Step 5: Generate recommendations
+      console.log('💡 Step 5: Creating recommendations...');
+      const recommendations = this.generateRecommendations(analysis, scores);
+      
+      // Step 6: Store results
+      console.log('💾 Step 6: Storing results...');
       const processingTime = Date.now() - startTime;
-      const insight = await this.storeInsights(patientId, {
-        ...patternAnalysis,
-        ...healthInsights,
+      const storedInsight = await this.storeInsights(patientId, {
+        analysis,
+        insights,
+        scores,
+        recommendations,
         analysisPeriod,
-        processingTime,
-        dataSources: ['biomarker_sleep', 'biomarker_heart', 'biomarker_activity', 'clinical_diagnostic_lab_tests']
+        processingTime
       });
       
       console.log(`✅ Sleep analysis completed in ${processingTime}ms`);
       
       return {
         success: true,
-        insight_id: insight.id,
+        insight_id: storedInsight.id,
         processing_time_ms: processingTime,
         analysis_summary: {
-          sleep_quality_score: healthInsights.sleepQualityScore,
-          pattern_trend: patternAnalysis.trends.overall,
-          key_recommendations: healthInsights.recommendations.slice(0, 3),
-          confidence_level: this.calculateConfidenceLevel(aggregatedData.dataQuality)
+          sleep_quality_score: scores.sleepQualityScore,
+          pattern_trend: analysis.trends.overall,
+          key_recommendations: recommendations.slice(0, 3),
+          confidence_level: scores.confidenceLevel,
+          data_quality: biomarkerData.dataQuality
         }
       };
       
     } catch (error) {
       console.error('❌ Sleep analysis failed:', error);
-      throw error;
+      throw new Error(`Sleep analysis failed: ${error.message}`);
     }
   }
 
-  private async generateLLMInsights(analysisData: any): Promise<string> {
-    const prompt = `You are a sleep medicine expert analyzing patient biomarker data. 
+  private async collectBiomarkerData(patientId: string) {
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const dateString = thirtyDaysAgo.toISOString().split('T')[0];
     
-    Sleep Metrics: ${JSON.stringify(analysisData.sleepMetrics, null, 2)}
-    Correlations: ${JSON.stringify(analysisData.correlations, null, 2)}
-    Trends: ${JSON.stringify(analysisData.trends, null, 2)}
-    Risk Factors: ${JSON.stringify(analysisData.riskFactors, null, 2)}
+    console.log(`📅 Fetching data from ${dateString} onwards for patient ${patientId}`);
+    
+    const [sleepResult, heartResult, activityResult] = await Promise.all([
+      this.supabase
+        .from('biomarker_sleep')
+        .select('*')
+        .eq('patient_id', patientId)
+        .gte('sleep_date', dateString)
+        .order('sleep_date', { ascending: false }),
+      
+      this.supabase
+        .from('biomarker_heart')
+        .select('*')
+        .eq('patient_id', patientId)
+        .gte('measurement_time', thirtyDaysAgo.toISOString())
+        .order('measurement_time', { ascending: false }),
+      
+      this.supabase
+        .from('biomarker_activity')
+        .select('*')
+        .eq('patient_id', patientId)
+        .gte('measurement_date', dateString)
+        .order('measurement_date', { ascending: false })
+    ]);
+
+    if (sleepResult.error) {
+      console.error('❌ Sleep data error:', sleepResult.error);
+      throw new Error(`Failed to fetch sleep data: ${sleepResult.error.message}`);
+    }
+    
+    if (heartResult.error) {
+      console.error('⚠️ Heart data error:', heartResult.error);
+    }
+    
+    if (activityResult.error) {
+      console.error('⚠️ Activity data error:', activityResult.error);
+    }
+
+    const sleepData = sleepResult.data || [];
+    const heartData = heartResult.data || [];
+    const activityData = activityResult.data || [];
+    
+    const dataQuality = this.assessDataQuality(sleepData, heartData, activityData);
+    
+    console.log('📊 Data collection summary:', {
+      sleepRecords: sleepData.length,
+      heartRecords: heartData.length,
+      activityRecords: activityData.length,
+      dataQuality: dataQuality.quality
+    });
+
+    return {
+      sleepData,
+      heartData,
+      activityData,
+      dataQuality
+    };
+  }
+
+  private async analyzePatterns(biomarkerData: any) {
+    const { sleepData, heartData, activityData } = biomarkerData;
+    
+    // Calculate sleep metrics
+    const sleepMetrics = this.calculateSleepMetrics(sleepData);
+    console.log('😴 Sleep metrics:', sleepMetrics);
+    
+    // Identify trends
+    const trends = this.identifyTrends(sleepData);
+    console.log('📈 Trends:', trends);
+    
+    // Find correlations
+    const correlations = this.findCorrelations(sleepData, heartData, activityData);
+    console.log('🔗 Correlations:', correlations);
+    
+    // Detect anomalies
+    const anomalies = this.detectAnomalies(sleepData);
+    console.log('⚠️ Anomalies found:', anomalies.length);
+    
+    // Determine chronotype
+    const chronotype = this.determineChronotype(sleepData);
+    console.log('🕒 Chronotype:', chronotype);
+    
+    return {
+      sleepMetrics,
+      trends,
+      correlations,
+      anomalies,
+      chronotype,
+      dataRange: {
+        startDate: sleepData[sleepData.length - 1]?.sleep_date,
+        endDate: sleepData[0]?.sleep_date,
+        totalDays: sleepData.length
+      }
+    };
+  }
+
+  private async generateInsights(analysis: any): Promise<string> {
+    // Check if Azure OpenAI is configured
+    if (!this.azureEndpoint || !this.azureApiKey || !this.azureDeployment) {
+      console.log('⚠️ Azure OpenAI not configured, using rule-based insights');
+      return this.generateRuleBasedInsights(analysis);
+    }
+
+    const prompt = `You are a sleep medicine expert analyzing comprehensive biomarker data. 
+    
+    PATIENT SLEEP ANALYSIS:
+    - Sleep Duration: ${analysis.sleepMetrics.avgSleepDuration} minutes average
+    - Sleep Efficiency: ${analysis.sleepMetrics.avgSleepEfficiency}%
+    - Deep Sleep: ${analysis.sleepMetrics.avgDeepSleep} minutes
+    - REM Sleep: ${analysis.sleepMetrics.avgRemSleep} minutes
+    - Sleep Debt: ${analysis.sleepMetrics.sleepDebt} hours
+    - Consistency: ${analysis.sleepMetrics.consistency}%
+    - Overall Trend: ${analysis.trends.overall}
+    - Chronotype: ${analysis.chronotype}
+    - Anomalies: ${analysis.anomalies.length} detected
+    
+    CORRELATIONS:
+    ${JSON.stringify(analysis.correlations, null, 2)}
     
     Provide a comprehensive sleep health analysis focusing on:
     1. Overall sleep quality assessment
@@ -196,9 +230,10 @@ class SleepAnalysisAgent {
     3. Potential health implications
     4. Personalized insights based on patterns
     
-    Keep response under 500 words and be specific about biomarker correlations.`;
+    Keep response under 400 words and be specific about actionable insights.`;
 
     try {
+      console.log('🤖 Calling Azure OpenAI...');
       const response = await fetch(`${this.azureEndpoint}/openai/deployments/${this.azureDeployment}/chat/completions?api-version=2024-02-01`, {
         method: 'POST',
         headers: {
@@ -210,181 +245,286 @@ class SleepAnalysisAgent {
             { role: 'system', content: 'You are a sleep medicine expert providing data-driven insights.' },
             { role: 'user', content: prompt }
           ],
-          max_tokens: 800,
+          max_tokens: 600,
           temperature: 0.3,
         }),
       });
 
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Azure OpenAI API error:', response.status, errorText);
+        throw new Error(`Azure OpenAI API error: ${response.status}`);
+      }
+
       const data = await response.json();
-      return data.choices[0]?.message?.content || 'Analysis unavailable';
+      const aiInsights = data.choices[0]?.message?.content || 'AI analysis unavailable';
+      console.log('✅ AI insights generated successfully');
+      return aiInsights;
     } catch (error) {
-      console.error('LLM analysis failed:', error);
-      return 'LLM analysis temporarily unavailable';
+      console.error('❌ AI insight generation failed:', error);
+      return this.generateRuleBasedInsights(analysis);
     }
   }
 
-  private calculateSleepMetrics(sleepData: any[]) {
-    if (!sleepData.length) return {};
+  private generateRuleBasedInsights(analysis: any): string {
+    const { sleepMetrics, trends, anomalies, chronotype } = analysis;
     
-    const recent7Days = sleepData.slice(0, 7);
-    const avgSleepDuration = recent7Days.reduce((sum, day) => sum + (day.total_sleep_time || 0), 0) / recent7Days.length;
-    const avgSleepEfficiency = recent7Days.reduce((sum, day) => sum + (day.sleep_efficiency || 0), 0) / recent7Days.length;
-    const avgDeepSleep = recent7Days.reduce((sum, day) => sum + (day.deep_sleep_minutes || 0), 0) / recent7Days.length;
-    const avgRemSleep = recent7Days.reduce((sum, day) => sum + (day.rem_sleep_minutes || 0), 0) / recent7Days.length;
+    let insights = `Sleep Analysis Summary:\n\n`;
+    
+    // Sleep Quality Assessment
+    if (sleepMetrics.avgSleepEfficiency > 85) {
+      insights += `✅ Excellent sleep efficiency at ${sleepMetrics.avgSleepEfficiency}% - you're falling asleep quickly and staying asleep.\n\n`;
+    } else if (sleepMetrics.avgSleepEfficiency > 75) {
+      insights += `⚠️ Good sleep efficiency at ${sleepMetrics.avgSleepEfficiency}% - room for improvement in sleep quality.\n\n`;
+    } else {
+      insights += `❌ Poor sleep efficiency at ${sleepMetrics.avgSleepEfficiency}% - significant sleep disruption detected.\n\n`;
+    }
+    
+    // Sleep Duration
+    if (sleepMetrics.avgSleepDuration >= 420 && sleepMetrics.avgSleepDuration <= 540) {
+      insights += `✅ Optimal sleep duration averaging ${Math.round(sleepMetrics.avgSleepDuration/60*10)/10} hours.\n\n`;
+    } else if (sleepMetrics.avgSleepDuration < 420) {
+      insights += `❌ Insufficient sleep duration at ${Math.round(sleepMetrics.avgSleepDuration/60*10)/10} hours - aim for 7-9 hours.\n\n`;
+    } else {
+      insights += `⚠️ Extended sleep duration at ${Math.round(sleepMetrics.avgSleepDuration/60*10)/10} hours - may indicate recovery needs.\n\n`;
+    }
+    
+    // Trends
+    if (trends.overall === 'improving') {
+      insights += `📈 Positive trend: Your sleep patterns are improving over time.\n\n`;
+    } else if (trends.overall === 'declining') {
+      insights += `📉 Concerning trend: Sleep quality has declined recently - investigate potential causes.\n\n`;
+    } else {
+      insights += `📊 Stable patterns: Sleep consistency maintained over the analysis period.\n\n`;
+    }
+    
+    // Sleep Debt
+    if (sleepMetrics.sleepDebt > 5) {
+      insights += `⚠️ Significant sleep debt of ${sleepMetrics.sleepDebt} hours - prioritize recovery sleep.\n\n`;
+    } else if (sleepMetrics.sleepDebt > 2) {
+      insights += `⚠️ Moderate sleep debt of ${sleepMetrics.sleepDebt} hours - weekend recovery recommended.\n\n`;
+    }
+    
+    // Chronotype insights
+    insights += `🕒 Chronotype: ${chronotype} - align your schedule with your natural sleep preferences.\n\n`;
+    
+    // Anomalies
+    if (anomalies.length > 0) {
+      insights += `⚠️ ${anomalies.length} sleep anomalies detected - review recent lifestyle changes.`;
+    }
+    
+    return insights;
+  }
+
+  private calculateScores(analysis: any) {
+    const { sleepMetrics, trends, anomalies } = analysis;
+    
+    let sleepQualityScore = 70; // Base score
+    
+    // Sleep efficiency impact (30 points)
+    if (sleepMetrics.avgSleepEfficiency > 90) sleepQualityScore += 20;
+    else if (sleepMetrics.avgSleepEfficiency > 85) sleepQualityScore += 15;
+    else if (sleepMetrics.avgSleepEfficiency > 80) sleepQualityScore += 10;
+    else if (sleepMetrics.avgSleepEfficiency > 75) sleepQualityScore += 5;
+    else if (sleepMetrics.avgSleepEfficiency < 70) sleepQualityScore -= 25;
+    
+    // Duration impact (15 points)
+    if (sleepMetrics.avgSleepDuration >= 420 && sleepMetrics.avgSleepDuration <= 540) {
+      sleepQualityScore += 10;
+    } else if (sleepMetrics.avgSleepDuration < 360) {
+      sleepQualityScore -= 20;
+    } else if (sleepMetrics.avgSleepDuration > 600) {
+      sleepQualityScore -= 10;
+    }
+    
+    // Trend impact (10 points)
+    if (trends.overall === 'improving') sleepQualityScore += 10;
+    else if (trends.overall === 'declining') sleepQualityScore -= 15;
+    
+    // Consistency impact (10 points)
+    if (sleepMetrics.consistency > 80) sleepQualityScore += 10;
+    else if (sleepMetrics.consistency < 60) sleepQualityScore -= 10;
+    
+    // Anomalies impact
+    sleepQualityScore -= Math.min(anomalies.length * 3, 15);
+    
+    // Sleep debt impact
+    if (sleepMetrics.sleepDebt > 5) sleepQualityScore -= 15;
+    else if (sleepMetrics.sleepDebt > 2) sleepQualityScore -= 8;
+    
+    sleepQualityScore = Math.max(0, Math.min(100, Math.round(sleepQualityScore)));
+    
+    // Calculate confidence level
+    const dataPoints = analysis.dataRange.totalDays;
+    let confidenceLevel = 0.5;
+    if (dataPoints >= 30) confidenceLevel = 0.95;
+    else if (dataPoints >= 14) confidenceLevel = 0.85;
+    else if (dataPoints >= 7) confidenceLevel = 0.75;
+    else if (dataPoints >= 3) confidenceLevel = 0.65;
     
     return {
-      avgSleepDuration: Math.round(avgSleepDuration),
-      avgSleepEfficiency: Math.round(avgSleepEfficiency * 100) / 100,
-      avgDeepSleep: Math.round(avgDeepSleep),
-      avgRemSleep: Math.round(avgRemSleep),
-      sleepDebt: this.calculateSleepDebt(recent7Days),
-      consistency: this.calculateSleepConsistency(recent7Days)
+      sleepQualityScore,
+      confidenceLevel: Math.round(confidenceLevel * 100) / 100
     };
   }
 
-  private findCorrelations(sleepData: any[], heartData: any[], activityData: any[]) {
-    // Find correlations between sleep quality and other metrics
-    return {
-      hrvSleepCorrelation: this.calculateCorrelation(sleepData, heartData, 'sleep_efficiency', 'hrv_rmssd'),
-      exerciseSleepCorrelation: this.calculateCorrelation(sleepData, activityData, 'sleep_efficiency', 'exercise_minutes'),
-      stepsDeepSleepCorrelation: this.calculateCorrelation(sleepData, activityData, 'deep_sleep_minutes', 'steps_count')
-    };
-  }
-
-  private identifyTrends(sleepData: any[]) {
-    if (sleepData.length < 7) return { overall: 'insufficient_data' };
-    
-    const recent = sleepData.slice(0, 7);
-    const previous = sleepData.slice(7, 14);
-    
-    const recentAvg = recent.reduce((sum, day) => sum + (day.sleep_efficiency || 0), 0) / recent.length;
-    const previousAvg = previous.reduce((sum, day) => sum + (day.sleep_efficiency || 0), 0) / previous.length;
-    
-    const trend = recentAvg > previousAvg * 1.05 ? 'improving' : 
-                  recentAvg < previousAvg * 0.95 ? 'declining' : 'stable';
-    
-    return {
-      overall: trend,
-      sleepEfficiencyTrend: trend,
-      durationTrend: this.calculateTrend(recent, previous, 'total_sleep_time'),
-      deepSleepTrend: this.calculateTrend(recent, previous, 'deep_sleep_minutes')
-    };
-  }
-
-  private detectAnomalies(sleepData: any[]) {
-    const anomalies = [];
-    
-    sleepData.forEach(day => {
-      if (day.sleep_efficiency && day.sleep_efficiency < 0.7) {
-        anomalies.push({ date: day.sleep_date, type: 'low_efficiency', value: day.sleep_efficiency });
-      }
-      if (day.total_sleep_time && day.total_sleep_time < 300) { // Less than 5 hours
-        anomalies.push({ date: day.sleep_date, type: 'insufficient_sleep', value: day.total_sleep_time });
-      }
-    });
-    
-    return anomalies;
-  }
-
-  private async generateRecommendations(analysisData: any, llmInsights: string): Promise<any[]> {
+  private generateRecommendations(analysis: any, scores: any) {
     const recommendations = [];
+    const { sleepMetrics, trends, correlations, chronotype } = analysis;
     
-    // Data-driven recommendations
-    if (analysisData.sleepMetrics.avgSleepEfficiency < 0.8) {
+    // Sleep efficiency recommendations
+    if (sleepMetrics.avgSleepEfficiency < 80) {
       recommendations.push({
         category: 'sleep_hygiene',
         priority: 'high',
         title: 'Improve Sleep Efficiency',
-        description: 'Your sleep efficiency is below optimal. Focus on consistent bedtime routine.',
-        action: 'Set a consistent bedtime and wake time, avoid screens 1 hour before bed'
+        description: `Your sleep efficiency is ${sleepMetrics.avgSleepEfficiency}%. Focus on consistent bedtime routines.`,
+        action: 'Set consistent bedtime/wake times, avoid screens 1 hour before bed, keep bedroom cool'
       });
     }
     
-    if (analysisData.sleepMetrics.avgDeepSleep < 60) {
+    // Duration recommendations
+    if (sleepMetrics.avgSleepDuration < 420) {
+      recommendations.push({
+        category: 'duration',
+        priority: 'high',
+        title: 'Increase Sleep Duration',
+        description: `You're averaging ${Math.round(sleepMetrics.avgSleepDuration/60*10)/10} hours. Aim for 7-9 hours.`,
+        action: 'Move bedtime earlier by 30 minutes weekly until reaching 7-8 hours total'
+      });
+    }
+    
+    // Deep sleep recommendations
+    if (sleepMetrics.avgDeepSleep < 60) {
       recommendations.push({
         category: 'recovery',
         priority: 'medium',
-        title: 'Increase Deep Sleep',
-        description: 'Low deep sleep may affect recovery. Consider temperature and stress management.',
-        action: 'Keep bedroom cool (65-68°F), practice relaxation before bed'
+        title: 'Enhance Deep Sleep',
+        description: 'Low deep sleep may affect recovery and memory consolidation.',
+        action: 'Keep bedroom temperature 65-68°F, avoid caffeine after 2 PM, exercise regularly'
       });
     }
     
-    // Correlation-based recommendations
-    if (analysisData.correlations.exerciseSleepCorrelation > 0.3) {
+    // Consistency recommendations
+    if (sleepMetrics.consistency < 70) {
       recommendations.push({
-        category: 'exercise',
+        category: 'consistency',
         priority: 'medium',
-        title: 'Optimize Exercise Timing',
-        description: 'Exercise shows positive correlation with sleep quality.',
-        action: 'Maintain regular exercise, but avoid vigorous activity 3 hours before bed'
+        title: 'Improve Sleep Consistency',
+        description: 'Irregular sleep patterns can disrupt your circadian rhythm.',
+        action: 'Maintain same bedtime/wake time within 30 minutes, even on weekends'
+      });
+    }
+    
+    // Sleep debt recommendations
+    if (sleepMetrics.sleepDebt > 3) {
+      recommendations.push({
+        category: 'recovery',
+        priority: 'high',
+        title: 'Address Sleep Debt',
+        description: `You have ${sleepMetrics.sleepDebt} hours of accumulated sleep debt.`,
+        action: 'Add 30-60 minutes to nightly sleep until debt is recovered'
+      });
+    }
+    
+    // Chronotype recommendations
+    if (chronotype !== 'unknown') {
+      recommendations.push({
+        category: 'chronotype',
+        priority: 'low',
+        title: 'Align with Natural Rhythm',
+        description: `Your chronotype is ${chronotype} - optimize schedule accordingly.`,
+        action: chronotype === 'morning' ? 
+          'Schedule important activities in morning hours' : 
+          'Allow for later bedtime if lifestyle permits'
+      });
+    }
+    
+    // Trend-based recommendations
+    if (trends.overall === 'declining') {
+      recommendations.push({
+        category: 'intervention',
+        priority: 'high',
+        title: 'Address Declining Trend',
+        description: 'Sleep quality has declined recently.',
+        action: 'Review recent lifestyle changes, stress levels, and environmental factors'
       });
     }
     
     return recommendations;
   }
 
-  private calculateSleepQualityScore(analysisData: any): number {
-    const { sleepMetrics, trends, anomalies } = analysisData;
-    
-    let score = 70; // Base score
-    
-    // Sleep efficiency impact
-    if (sleepMetrics.avgSleepEfficiency > 0.85) score += 15;
-    else if (sleepMetrics.avgSleepEfficiency > 0.75) score += 10;
-    else if (sleepMetrics.avgSleepEfficiency < 0.7) score -= 20;
-    
-    // Duration impact
-    if (sleepMetrics.avgSleepDuration >= 420 && sleepMetrics.avgSleepDuration <= 540) score += 10;
-    else if (sleepMetrics.avgSleepDuration < 360) score -= 15;
-    
-    // Trend impact
-    if (trends.overall === 'improving') score += 10;
-    else if (trends.overall === 'declining') score -= 10;
-    
-    // Anomalies impact
-    score -= Math.min(anomalies.length * 5, 20);
-    
-    return Math.max(0, Math.min(100, Math.round(score)));
-  }
-
   private async storeInsights(patientId: string, insightData: any) {
     const nextAnalysisDate = new Date();
     nextAnalysisDate.setDate(nextAnalysisDate.getDate() + 1);
     
+    const insertData = {
+      patient_id: patientId,
+      analysis_date: new Date().toISOString().split('T')[0],
+      analysis_period: insightData.analysisPeriod,
+      sleep_quality_score: insightData.scores.sleepQualityScore,
+      sleep_debt_hours: insightData.analysis.sleepMetrics.sleepDebt,
+      optimal_bedtime: this.calculateOptimalBedtime(insightData.analysis),
+      optimal_wake_time: this.calculateOptimalWakeTime(insightData.analysis),
+      predicted_sleep_duration: insightData.analysis.sleepMetrics.avgSleepDuration,
+      sleep_pattern_trend: insightData.analysis.trends.overall,
+      key_factors: this.identifyKeyFactors(insightData.analysis),
+      recommendations: insightData.recommendations,
+      confidence_level: insightData.scores.confidenceLevel,
+      processing_time_ms: insightData.processingTime,
+      data_sources_used: ['biomarker_sleep', 'biomarker_heart', 'biomarker_activity'],
+      next_analysis_date: nextAnalysisDate.toISOString().split('T')[0]
+    };
+    
+    console.log('💾 Storing insight data:', insertData);
+    
     const { data, error } = await this.supabase
       .from('ai_sleep_insights')
-      .insert({
-        patient_id: patientId,
-        analysis_date: new Date().toISOString().split('T')[0],
-        analysis_period: insightData.analysisPeriod,
-        sleep_quality_score: insightData.sleepQualityScore,
-        sleep_debt_hours: insightData.sleepMetrics?.sleepDebt,
-        optimal_bedtime: insightData.optimalSchedule?.bedtime,
-        optimal_wake_time: insightData.optimalSchedule?.wakeTime,
-        predicted_sleep_duration: insightData.sleepMetrics?.avgSleepDuration,
-        sleep_pattern_trend: insightData.trends?.overall,
-        key_factors: insightData.keyFactors,
-        recommendations: insightData.recommendations,
-        confidence_level: this.calculateConfidenceLevel(insightData.dataQuality),
-        processing_time_ms: insightData.processingTime,
-        data_sources_used: insightData.dataSources,
-        next_analysis_date: nextAnalysisDate.toISOString().split('T')[0]
-      })
+      .insert(insertData)
       .select()
       .single();
     
-    if (error) throw error;
+    if (error) {
+      console.error('❌ Error storing insights:', error);
+      throw new Error(`Failed to store insights: ${error.message}`);
+    }
+    
+    console.log('✅ Insights stored successfully with ID:', data.id);
     return data;
   }
 
   // Helper methods
   private assessDataQuality(sleepData: any[], heartData: any[], activityData: any[]) {
+    const quality = sleepData.length >= 14 ? 'excellent' : 
+                   sleepData.length >= 7 ? 'good' : 
+                   sleepData.length >= 3 ? 'fair' : 'poor';
+    
     return {
       sleepDataPoints: sleepData.length,
       heartDataPoints: heartData.length,
       activityDataPoints: activityData.length,
-      quality: sleepData.length >= 7 ? 'good' : sleepData.length >= 3 ? 'fair' : 'poor'
+      quality
+    };
+  }
+
+  private calculateSleepMetrics(sleepData: any[]) {
+    if (!sleepData.length) return {};
+    
+    const recent7Days = sleepData.slice(0, Math.min(7, sleepData.length));
+    const recent30Days = sleepData.slice(0, Math.min(30, sleepData.length));
+    
+    const avgSleepDuration = recent7Days.reduce((sum, day) => sum + (day.total_sleep_time || 0), 0) / recent7Days.length;
+    const avgSleepEfficiency = recent7Days.reduce((sum, day) => sum + ((day.sleep_efficiency || 0) * 100), 0) / recent7Days.length;
+    const avgDeepSleep = recent7Days.reduce((sum, day) => sum + (day.deep_sleep_minutes || 0), 0) / recent7Days.length;
+    const avgRemSleep = recent7Days.reduce((sum, day) => sum + (day.rem_sleep_minutes || 0), 0) / recent7Days.length;
+    
+    return {
+      avgSleepDuration: Math.round(avgSleepDuration),
+      avgSleepEfficiency: Math.round(avgSleepEfficiency * 10) / 10,
+      avgDeepSleep: Math.round(avgDeepSleep),
+      avgRemSleep: Math.round(avgRemSleep),
+      sleepDebt: this.calculateSleepDebt(recent7Days),
+      consistency: this.calculateSleepConsistency(recent30Days)
     };
   }
 
@@ -398,7 +538,7 @@ class SleepAnalysisAgent {
   }
 
   private calculateSleepConsistency(sleepData: any[]): number {
-    if (sleepData.length < 3) return 0;
+    if (sleepData.length < 3) return 50;
     
     const bedtimes = sleepData.map(day => {
       if (!day.bedtime) return null;
@@ -406,150 +546,270 @@ class SleepAnalysisAgent {
       return time.getHours() * 60 + time.getMinutes();
     }).filter(time => time !== null);
     
-    if (bedtimes.length < 3) return 0;
+    if (bedtimes.length < 3) return 50;
     
-    const variance = this.calculateVariance(bedtimes);
-    return Math.max(0, 100 - variance / 10); // Lower variance = higher consistency
+    const mean = bedtimes.reduce((sum, time) => sum + time, 0) / bedtimes.length;
+    const variance = bedtimes.reduce((sum, time) => sum + Math.pow(time - mean, 2), 0) / bedtimes.length;
+    const stdDev = Math.sqrt(variance);
+    
+    // Convert to percentage (lower variance = higher consistency)
+    return Math.max(0, Math.min(100, Math.round(100 - (stdDev / 60) * 10)));
   }
 
-  private calculateCorrelation(data1: any[], data2: any[], metric1: string, metric2: string): number {
-    // Simplified correlation calculation
-    const pairs = [];
+  private identifyTrends(sleepData: any[]) {
+    if (sleepData.length < 7) return { overall: 'insufficient_data' };
     
-    data1.forEach(item1 => {
-      const date1 = item1.sleep_date || item1.measurement_date;
-      const match = data2.find(item2 => {
-        const date2 = item2.measurement_date || item2.sleep_date;
-        return date1 === date2;
-      });
-      
-      if (match && item1[metric1] && match[metric2]) {
-        pairs.push([item1[metric1], match[metric2]]);
-      }
-    });
+    const recent = sleepData.slice(0, 7);
+    const previous = sleepData.slice(7, 14);
     
-    if (pairs.length < 3) return 0;
+    if (previous.length === 0) return { overall: 'stable' };
     
-    // Calculate Pearson correlation coefficient (simplified)
-    const n = pairs.length;
-    const sum1 = pairs.reduce((sum, pair) => sum + pair[0], 0);
-    const sum2 = pairs.reduce((sum, pair) => sum + pair[1], 0);
+    const recentAvgEfficiency = recent.reduce((sum, day) => sum + ((day.sleep_efficiency || 0) * 100), 0) / recent.length;
+    const previousAvgEfficiency = previous.reduce((sum, day) => sum + ((day.sleep_efficiency || 0) * 100), 0) / previous.length;
     
-    const mean1 = sum1 / n;
-    const mean2 = sum2 / n;
+    const efficiencyChange = ((recentAvgEfficiency - previousAvgEfficiency) / previousAvgEfficiency) * 100;
     
-    let numerator = 0;
-    let denom1 = 0;
-    let denom2 = 0;
+    let trend = 'stable';
+    if (efficiencyChange > 5) trend = 'improving';
+    else if (efficiencyChange < -5) trend = 'declining';
     
-    pairs.forEach(pair => {
-      const diff1 = pair[0] - mean1;
-      const diff2 = pair[1] - mean2;
-      numerator += diff1 * diff2;
-      denom1 += diff1 * diff1;
-      denom2 += diff2 * diff2;
-    });
-    
-    const denominator = Math.sqrt(denom1 * denom2);
-    return denominator === 0 ? 0 : Math.round((numerator / denominator) * 100) / 100;
+    return {
+      overall: trend,
+      sleepEfficiencyChange: Math.round(efficiencyChange * 10) / 10,
+      durationTrend: this.calculateMetricTrend(recent, previous, 'total_sleep_time'),
+      deepSleepTrend: this.calculateMetricTrend(recent, previous, 'deep_sleep_minutes')
+    };
   }
 
-  private calculateTrend(recent: any[], previous: any[], metric: string): string {
+  private calculateMetricTrend(recent: any[], previous: any[], metric: string): string {
+    if (previous.length === 0) return 'stable';
+    
     const recentAvg = recent.reduce((sum, item) => sum + (item[metric] || 0), 0) / recent.length;
     const previousAvg = previous.reduce((sum, item) => sum + (item[metric] || 0), 0) / previous.length;
     
-    return recentAvg > previousAvg * 1.05 ? 'improving' : 
-           recentAvg < previousAvg * 0.95 ? 'declining' : 'stable';
+    const change = ((recentAvg - previousAvg) / previousAvg) * 100;
+    
+    if (change > 5) return 'improving';
+    else if (change < -5) return 'declining';
+    else return 'stable';
   }
 
-  private identifyRiskFactors(sleepData: any[], labData: any[]): any[] {
-    const risks = [];
+  private findCorrelations(sleepData: any[], heartData: any[], activityData: any[]) {
+    return {
+      sleepDurationVariability: this.calculateVariability(sleepData, 'total_sleep_time'),
+      sleepEfficiencyVariability: this.calculateVariability(sleepData, 'sleep_efficiency'),
+      exerciseImpact: this.assessExerciseImpact(sleepData, activityData),
+      heartRatePattern: this.assessHeartRatePattern(sleepData, heartData)
+    };
+  }
+
+  private calculateVariability(data: any[], metric: string): string {
+    if (data.length < 3) return 'insufficient_data';
     
-    // Check for chronic sleep deprivation
-    const avgSleep = sleepData.reduce((sum, day) => sum + (day.total_sleep_time || 0), 0) / sleepData.length;
-    if (avgSleep < 360) { // Less than 6 hours
-      risks.push({ factor: 'chronic_sleep_deprivation', severity: 'high', value: avgSleep });
-    }
+    const values = data.map(item => item[metric]).filter(val => val != null);
+    if (values.length < 3) return 'insufficient_data';
     
-    // Check lab values
-    labData.forEach(lab => {
-      if (lab.test_name === 'Cortisol' && lab.numeric_value > 25) {
-        risks.push({ factor: 'elevated_cortisol', severity: 'medium', value: lab.numeric_value });
+    const mean = values.reduce((sum, val) => sum + val, 0) / values.length;
+    const variance = values.reduce((sum, val) => sum + Math.pow(val - mean, 2), 0) / values.length;
+    const cv = Math.sqrt(variance) / mean * 100; // Coefficient of variation
+    
+    if (cv < 10) return 'low';
+    else if (cv < 20) return 'moderate';
+    else return 'high';
+  }
+
+  private assessExerciseImpact(sleepData: any[], activityData: any[]): string {
+    if (sleepData.length < 5 || activityData.length < 5) return 'insufficient_data';
+    
+    // Simple correlation between exercise and sleep quality
+    let correlationSum = 0;
+    let correlationCount = 0;
+    
+    sleepData.forEach(sleep => {
+      const matchingActivity = activityData.find(activity => 
+        activity.measurement_date === sleep.sleep_date
+      );
+      
+      if (matchingActivity && sleep.sleep_efficiency && matchingActivity.exercise_minutes) {
+        const exerciseLevel = matchingActivity.exercise_minutes > 30 ? 1 : 0;
+        const sleepQuality = sleep.sleep_efficiency > 0.8 ? 1 : 0;
+        correlationSum += exerciseLevel === sleepQuality ? 1 : 0;
+        correlationCount++;
       }
     });
     
-    return risks;
+    if (correlationCount < 3) return 'insufficient_data';
+    
+    const correlation = correlationSum / correlationCount;
+    if (correlation > 0.7) return 'positive';
+    else if (correlation < 0.3) return 'negative';
+    else return 'neutral';
+  }
+
+  private assessHeartRatePattern(sleepData: any[], heartData: any[]): string {
+    if (sleepData.length < 3 || heartData.length < 3) return 'insufficient_data';
+    
+    const avgRestingHR = heartData.reduce((sum, hr) => sum + (hr.resting_heart_rate || 0), 0) / heartData.length;
+    
+    if (avgRestingHR < 60) return 'excellent';
+    else if (avgRestingHR < 70) return 'good';
+    else if (avgRestingHR < 80) return 'average';
+    else return 'elevated';
+  }
+
+  private detectAnomalies(sleepData: any[]) {
+    const anomalies = [];
+    
+    sleepData.forEach(day => {
+      if (day.sleep_efficiency && day.sleep_efficiency < 0.6) {
+        anomalies.push({ 
+          date: day.sleep_date, 
+          type: 'very_low_efficiency', 
+          value: Math.round(day.sleep_efficiency * 100),
+          severity: 'high'
+        });
+      } else if (day.sleep_efficiency && day.sleep_efficiency < 0.7) {
+        anomalies.push({ 
+          date: day.sleep_date, 
+          type: 'low_efficiency', 
+          value: Math.round(day.sleep_efficiency * 100),
+          severity: 'medium'
+        });
+      }
+      
+      if (day.total_sleep_time && day.total_sleep_time < 240) { // Less than 4 hours
+        anomalies.push({ 
+          date: day.sleep_date, 
+          type: 'severe_sleep_deprivation', 
+          value: Math.round(day.total_sleep_time / 60 * 10) / 10,
+          severity: 'critical'
+        });
+      } else if (day.total_sleep_time && day.total_sleep_time < 300) { // Less than 5 hours
+        anomalies.push({ 
+          date: day.sleep_date, 
+          type: 'insufficient_sleep', 
+          value: Math.round(day.total_sleep_time / 60 * 10) / 10,
+          severity: 'high'
+        });
+      }
+      
+      if (day.total_sleep_time && day.total_sleep_time > 720) { // More than 12 hours
+        anomalies.push({ 
+          date: day.sleep_date, 
+          type: 'excessive_sleep', 
+          value: Math.round(day.total_sleep_time / 60 * 10) / 10,
+          severity: 'medium'
+        });
+      }
+    });
+    
+    return anomalies;
   }
 
   private determineChronotype(sleepData: any[]): string {
-    const bedtimes = sleepData
-      .filter(day => day.bedtime)
-      .map(day => new Date(day.bedtime).getHours());
+    const bedtimes = sleepData.map(day => {
+      if (!day.bedtime) return null;
+      const time = new Date(day.bedtime);
+      return time.getHours() + time.getMinutes() / 60;
+    }).filter(time => time !== null);
     
-    if (bedtimes.length < 3) return 'unknown';
+    if (bedtimes.length < 5) return 'unknown';
     
-    const avgBedtime = bedtimes.reduce((sum, hour) => sum + hour, 0) / bedtimes.length;
+    const avgBedtime = bedtimes.reduce((sum, time) => sum + time, 0) / bedtimes.length;
     
-    if (avgBedtime <= 22) return 'morning_type';
-    if (avgBedtime >= 24) return 'evening_type';
-    return 'intermediate_type';
+    if (avgBedtime < 22) return 'early_bird';
+    else if (avgBedtime < 23.5) return 'moderate_early';
+    else if (avgBedtime < 1) return 'moderate_late';
+    else return 'night_owl';
   }
 
-  private calculateOptimalSchedule(analysisData: any): any {
-    const { sleepMetrics, chronotype } = analysisData;
+  private calculateOptimalBedtime(analysis: any): string {
+    const { sleepMetrics, chronotype } = analysis;
     
-    // Base recommendations on chronotype and current patterns
-    let optimalBedtime = '22:30:00';
-    let optimalWakeTime = '07:00:00';
+    // Base optimal bedtime on chronotype and current patterns
+    let optimalHour = 22.5; // Default 10:30 PM
     
-    if (chronotype === 'evening_type') {
-      optimalBedtime = '23:30:00';
-      optimalWakeTime = '08:00:00';
-    } else if (chronotype === 'morning_type') {
-      optimalBedtime = '21:30:00';
-      optimalWakeTime = '06:00:00';
-    }
+    if (chronotype === 'early_bird') optimalHour = 21.5;
+    else if (chronotype === 'moderate_early') optimalHour = 22;
+    else if (chronotype === 'moderate_late') optimalHour = 23;
+    else if (chronotype === 'night_owl') optimalHour = 23.5;
     
-    return { bedtime: optimalBedtime, wakeTime: optimalWakeTime };
+    const hours = Math.floor(optimalHour);
+    const minutes = Math.round((optimalHour - hours) * 60);
+    
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
   }
 
-  private identifyKeyFactors(analysisData: any): any {
-    const factors = {};
+  private calculateOptimalWakeTime(analysis: any): string {
+    const bedtime = this.calculateOptimalBedtime(analysis);
+    const [bedHours, bedMinutes] = bedtime.split(':').map(Number);
     
-    // Sleep efficiency factor
-    if (analysisData.sleepMetrics.avgSleepEfficiency < 0.8) {
-      factors.sleep_efficiency = {
+    // Add 8 hours for optimal sleep
+    let wakeHours = bedHours + 8;
+    let wakeMinutes = bedMinutes;
+    
+    if (wakeHours >= 24) wakeHours -= 24;
+    
+    return `${wakeHours.toString().padStart(2, '0')}:${wakeMinutes.toString().padStart(2, '0')}`;
+  }
+
+  private identifyKeyFactors(analysis: any) {
+    const factors = [];
+    const { sleepMetrics, trends, anomalies, correlations } = analysis;
+    
+    if (sleepMetrics.avgSleepEfficiency < 80) {
+      factors.push({
+        factor: 'Sleep Efficiency',
         impact: 'negative',
-        severity: 'high',
-        current_value: analysisData.sleepMetrics.avgSleepEfficiency
-      };
+        value: `${sleepMetrics.avgSleepEfficiency}%`,
+        description: 'Below optimal range'
+      });
     }
     
-    // Exercise correlation factor
-    if (Math.abs(analysisData.correlations.exerciseSleepCorrelation) > 0.3) {
-      factors.exercise_timing = {
-        impact: analysisData.correlations.exerciseSleepCorrelation > 0 ? 'positive' : 'negative',
-        severity: 'medium',
-        correlation: analysisData.correlations.exerciseSleepCorrelation
-      };
+    if (sleepMetrics.sleepDebt > 3) {
+      factors.push({
+        factor: 'Sleep Debt',
+        impact: 'negative',
+        value: `${sleepMetrics.sleepDebt} hours`,
+        description: 'Accumulated sleep deficit'
+      });
+    }
+    
+    if (sleepMetrics.consistency < 70) {
+      factors.push({
+        factor: 'Sleep Consistency',
+        impact: 'negative',
+        value: `${sleepMetrics.consistency}%`,
+        description: 'Irregular sleep schedule'
+      });
+    }
+    
+    if (trends.overall === 'improving') {
+      factors.push({
+        factor: 'Sleep Trend',
+        impact: 'positive',
+        value: 'Improving',
+        description: 'Sleep quality trending upward'
+      });
+    } else if (trends.overall === 'declining') {
+      factors.push({
+        factor: 'Sleep Trend',
+        impact: 'negative',
+        value: 'Declining',
+        description: 'Sleep quality trending downward'
+      });
+    }
+    
+    if (anomalies.length > 0) {
+      factors.push({
+        factor: 'Sleep Anomalies',
+        impact: 'negative',
+        value: `${anomalies.length} detected`,
+        description: 'Irregular sleep patterns identified'
+      });
     }
     
     return factors;
-  }
-
-  private calculateConfidenceLevel(dataQuality: any): number {
-    switch (dataQuality.quality) {
-      case 'good': return 0.9;
-      case 'fair': return 0.7;
-      case 'poor': return 0.5;
-      default: return 0.3;
-    }
-  }
-
-  private calculateVariance(numbers: number[]): number {
-    const mean = numbers.reduce((sum, num) => sum + num, 0) / numbers.length;
-    const squaredDiffs = numbers.map(num => Math.pow(num - mean, 2));
-    return squaredDiffs.reduce((sum, diff) => sum + diff, 0) / numbers.length;
   }
 }
 
@@ -560,24 +820,39 @@ serve(async (req) => {
   }
 
   try {
+    console.log('🌟 Sleep Analysis Agent - Request received:', req.method, req.url);
+    
     const url = new URL(req.url);
     const pathname = url.pathname;
 
     // Initialize the agent
     const agent = new SleepAnalysisAgent();
 
-    // API Routes - Handle both root and /analyze endpoint
-    if ((pathname === '/sleep-analysis-agent/analyze' || pathname === '/' || pathname === '') && req.method === 'POST') {
-      const { patient_id, analysis_period = 'daily', force_refresh = false }: SleepAnalysisRequest = await req.json();
+    // Handle POST requests for analysis (both root and specific endpoint)
+    if ((pathname === '/' || pathname === '' || pathname === '/sleep-analysis-agent/analyze') && req.method === 'POST') {
+      console.log('📝 Processing analysis request...');
+      
+      const requestBody = await req.json();
+      console.log('📥 Request body:', requestBody);
+      
+      const { patient_id, analysis_period = 'daily', force_refresh = false }: SleepAnalysisRequest = requestBody;
       
       if (!patient_id) {
-        return new Response(JSON.stringify({ error: 'patient_id is required' }), {
+        console.error('❌ Missing patient_id in request');
+        return new Response(JSON.stringify({ 
+          error: 'patient_id is required',
+          received: requestBody
+        }), {
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
       }
 
+      console.log(`🎯 Starting analysis for patient: ${patient_id}, period: ${analysis_period}`);
+      
       const result = await agent.executeSleepAnalysis(patient_id, analysis_period);
+      
+      console.log('✅ Analysis completed successfully:', result);
       
       return new Response(JSON.stringify(result), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -618,79 +893,25 @@ serve(async (req) => {
     // API Documentation endpoint
     if (pathname === '/sleep-analysis-agent/docs' && req.method === 'GET') {
       const docs = {
-        name: "CrewAI Sleep Analysis Agent API",
-        version: "1.0.0",
-        description: "AI-powered sleep analysis agent using CrewAI methodology for comprehensive biomarker analysis",
+        name: "Enhanced Sleep Analysis Agent API",
+        version: "2.0.0",
+        description: "Comprehensive AI-powered sleep analysis with robust error handling and detailed insights",
         endpoints: {
-          "POST /sleep-analysis-agent/analyze": {
+          "POST /": {
             description: "Execute comprehensive sleep analysis for a patient",
             parameters: {
-              patient_id: { type: "string", required: true, description: "UUID of the patient" },
-              analysis_period: { type: "string", required: false, default: "daily", enum: ["daily", "weekly", "monthly"] },
-              force_refresh: { type: "boolean", required: false, default: false, description: "Force new analysis even if recent exists" }
-            },
-            response: {
-              success: "boolean",
-              insight_id: "string (UUID)",
-              processing_time_ms: "number",
-              analysis_summary: {
-                sleep_quality_score: "number (0-100)",
-                pattern_trend: "string (improving|declining|stable|inconsistent)",
-                key_recommendations: "array of top 3 recommendations",
-                confidence_level: "number (0-1)"
-              }
+              patient_id: { type: "string", required: true },
+              analysis_period: { type: "string", default: "daily" },
+              force_refresh: { type: "boolean", default: false }
             }
           },
-          "GET /sleep-analysis-agent/insights": {
-            description: "Retrieve stored sleep insights for a patient",
+          "GET /insights": {
+            description: "Retrieve stored sleep insights",
             parameters: {
-              patient_id: { type: "string", required: true, description: "UUID of the patient" },
-              limit: { type: "number", required: false, default: 10, description: "Number of insights to return" }
-            },
-            response: {
-              insights: "array of ai_sleep_insights records"
+              patient_id: { type: "string", required: true },
+              limit: { type: "number", default: 10 }
             }
-          },
-          "GET /sleep-analysis-agent/docs": {
-            description: "Get API documentation",
-            response: "This documentation object"
           }
-        },
-        agent_architecture: {
-          agents: [
-            {
-              name: "Sleep Data Analyst",
-              role: "Data aggregation and quality assessment",
-              data_sources: ["biomarker_sleep", "biomarker_heart", "biomarker_activity", "clinical_diagnostic_lab_tests"]
-            },
-            {
-              name: "Pattern Recognition Specialist",
-              role: "Trend analysis, correlation detection, anomaly identification",
-              methods: ["time series analysis", "correlation matrices", "statistical outlier detection"]
-            },
-            {
-              name: "Health Advisory Specialist", 
-              role: "LLM-powered insights and personalized recommendations",
-              capabilities: ["Azure OpenAI integration", "evidence-based recommendations", "risk assessment"]
-            }
-          ],
-          workflow: [
-            "1. Data Collection: Aggregate 30-day biomarker history",
-            "2. Pattern Analysis: Identify trends, correlations, and anomalies",
-            "3. LLM Analysis: Generate contextual health insights",
-            "4. Recommendation Engine: Create personalized action items",
-            "5. Storage: Persist insights with confidence scoring"
-          ]
-        },
-        data_schema: {
-          input_tables: {
-            biomarker_sleep: ["total_sleep_time", "sleep_efficiency", "rem_sleep_minutes", "deep_sleep_minutes", "hrv_score"],
-            biomarker_heart: ["resting_heart_rate", "hrv_rmssd", "hrv_sdnn"],
-            biomarker_activity: ["steps_count", "exercise_minutes", "workout_calories"],
-            clinical_diagnostic_lab_tests: ["cortisol", "melatonin", "vitamin_d", "magnesium", "glucose"]
-          },
-          output_table: "ai_sleep_insights",
-          key_metrics: ["sleep_quality_score", "sleep_debt_hours", "optimal_bedtime", "pattern_trend", "confidence_level"]
         }
       };
 
@@ -700,17 +921,26 @@ serve(async (req) => {
     }
 
     // 404 for unknown endpoints
-    return new Response(JSON.stringify({ error: 'Endpoint not found' }), {
+    console.log('❌ Unknown endpoint:', pathname);
+    return new Response(JSON.stringify({ 
+      error: 'Endpoint not found',
+      pathname,
+      method: req.method,
+      available_endpoints: ['POST /', 'GET /insights', 'GET /docs']
+    }), {
       status: 404,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
 
   } catch (error) {
-    console.error('Sleep Analysis Agent Error:', error);
+    console.error('💥 Sleep Analysis Agent Error:', error);
+    console.error('Stack trace:', error.stack);
+    
     return new Response(JSON.stringify({ 
       error: 'Internal server error', 
       message: error.message,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      stack: error.stack
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }

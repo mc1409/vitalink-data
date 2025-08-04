@@ -1,37 +1,49 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
+import { Separator } from '@/components/ui/separator';
+import { usePrimaryPatient } from '@/hooks/usePrimaryPatient';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/components/ui/use-toast';
 import { 
   Moon, 
   TrendingUp, 
   TrendingDown, 
   Minus, 
-  Activity, 
-  Heart, 
   Clock, 
-  Target,
-  Lightbulb,
+  Zap, 
+  Brain, 
+  Heart,
+  Activity,
+  AlertTriangle,
+  CheckCircle,
+  Info,
   RefreshCw,
-  Brain
-} from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
-import { usePrimaryPatient } from "@/hooks/usePrimaryPatient";
+  Calendar,
+  Target
+} from 'lucide-react';
+import { format } from 'date-fns';
 
 interface SleepInsight {
   id: string;
+  patient_id: string;
   analysis_date: string;
+  analysis_period: string;
   sleep_quality_score: number;
+  sleep_debt_hours: number;
+  optimal_bedtime: string;
+  optimal_wake_time: string;
+  predicted_sleep_duration: number;
   sleep_pattern_trend: string;
-  recommendations: any;
-  key_factors: any;
+  key_factors: any[];
+  recommendations: any[];
   confidence_level: number;
-  sleep_debt_hours: number | null;
-  optimal_bedtime: string | null;
-  optimal_wake_time: string | null;
-  predicted_sleep_duration: number | null;
+  processing_time_ms: number;
+  data_sources_used: string[];
+  next_analysis_date: string;
+  created_at: string;
 }
 
 interface AnalysisResult {
@@ -43,17 +55,18 @@ interface AnalysisResult {
     pattern_trend: string;
     key_recommendations: any[];
     confidence_level: number;
+    data_quality: any;
   };
 }
 
-export const WHOOPSleepAnalysis: React.FC = () => {
-  const [insights, setInsights] = useState<SleepInsight[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [analyzing, setAnalyzing] = useState(false);
-  const [latestInsight, setLatestInsight] = useState<SleepInsight | null>(null);
-  const { toast } = useToast();
-  const { primaryPatient } = usePrimaryPatient();
+const WHOOPSleepAnalysis: React.FC = () => {
+  const { primaryPatient, loading: patientLoading } = usePrimaryPatient();
   const primaryPatientId = primaryPatient?.id;
+  const { toast } = useToast();
+  const [insights, setInsights] = useState<SleepInsight[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [latestAnalysis, setLatestAnalysis] = useState<AnalysisResult | null>(null);
 
   useEffect(() => {
     if (primaryPatientId) {
@@ -63,20 +76,25 @@ export const WHOOPSleepAnalysis: React.FC = () => {
 
   const fetchInsights = async () => {
     if (!primaryPatientId) return;
-
+    
     setLoading(true);
     try {
-      const { data: insightsData, error } = await supabase
+      console.log('🔍 Fetching sleep insights for patient:', primaryPatientId);
+      
+      const { data, error } = await supabase
         .from('ai_sleep_insights')
         .select('*')
         .eq('patient_id', primaryPatientId)
-        .order('analysis_date', { ascending: false })
+        .order('created_at', { ascending: false })
         .limit(5);
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Error fetching insights:', error);
+        throw error;
+      }
 
-      setInsights((insightsData || []) as SleepInsight[]);
-      setLatestInsight((insightsData?.[0] || null) as SleepInsight | null);
+      console.log('✅ Fetched insights:', data);
+      setInsights((data || []) as SleepInsight[]);
     } catch (error) {
       console.error('Error fetching insights:', error);
       toast({
@@ -100,7 +118,11 @@ export const WHOOPSleepAnalysis: React.FC = () => {
     }
 
     setAnalyzing(true);
+    setLatestAnalysis(null);
+    
     try {
+      console.log('🚀 Starting sleep analysis for patient:', primaryPatientId);
+      
       const { data, error } = await supabase.functions.invoke('sleep-analysis-agent', {
         body: {
           patient_id: primaryPatientId,
@@ -109,19 +131,33 @@ export const WHOOPSleepAnalysis: React.FC = () => {
         }
       });
 
-      if (error) throw error;
+      console.log('📊 Analysis response:', { data, error });
 
+      if (error) {
+        console.error('❌ Analysis error:', error);
+        throw error;
+      }
+
+      if (!data?.success) {
+        console.error('❌ Analysis failed:', data);
+        throw new Error(data?.message || 'Analysis failed');
+      }
+
+      console.log('✅ Analysis completed successfully:', data);
+      setLatestAnalysis(data);
+      
+      // Refresh insights to show the new analysis
       await fetchInsights();
 
       toast({
         title: "Analysis Complete",
-        description: `Sleep analysis completed successfully`,
+        description: `Sleep analysis completed in ${Math.round(data.processing_time_ms / 1000)}s`,
       });
     } catch (error) {
-      console.error('Error running analysis:', error);
+      console.error('💥 Error running analysis:', error);
       toast({
         title: "Analysis Failed",
-        description: "Failed to run sleep analysis. Please try again.",
+        description: error.message || "Failed to run sleep analysis. Please try again.",
         variant: "destructive"
       });
     } finally {
@@ -129,250 +165,345 @@ export const WHOOPSleepAnalysis: React.FC = () => {
     }
   };
 
-  const getScoreColor = (score: number) => {
-    if (score >= 85) return 'text-green-500';
-    if (score >= 70) return 'text-yellow-500';
-    if (score >= 50) return 'text-orange-500';
-    return 'text-red-500';
+  const getScoreColor = (score: number): string => {
+    if (score >= 85) return 'text-green-600';
+    if (score >= 70) return 'text-yellow-600';
+    return 'text-red-600';
   };
 
-  const getScoreGradient = (score: number) => {
+  const getScoreGradient = (score: number): string => {
     if (score >= 85) return 'from-green-500 to-green-600';
     if (score >= 70) return 'from-yellow-500 to-yellow-600';
-    if (score >= 50) return 'from-orange-500 to-orange-600';
     return 'from-red-500 to-red-600';
   };
 
   const getTrendIcon = (trend: string) => {
     switch (trend) {
-      case 'improving': return <TrendingUp className="h-4 w-4 text-green-500" />;
-      case 'declining': return <TrendingDown className="h-4 w-4 text-red-500" />;
-      case 'stable': return <Minus className="h-4 w-4 text-blue-500" />;
-      default: return <Target className="h-4 w-4 text-gray-500" />;
+      case 'improving':
+        return <TrendingUp className="h-4 w-4 text-green-600" />;
+      case 'declining':
+        return <TrendingDown className="h-4 w-4 text-red-600" />;
+      default:
+        return <Minus className="h-4 w-4 text-gray-500" />;
     }
   };
 
-  const formatTime = (timeString: string | null) => {
-    if (!timeString) return '--';
-    const time = new Date(`2000-01-01T${timeString}`);
-    return time.toLocaleTimeString('en-US', { 
-      hour: 'numeric', 
-      minute: '2-digit',
-      hour12: true 
-    });
+  const getPriorityColor = (priority: string): "default" | "destructive" | "secondary" | "outline" => {
+    switch (priority) {
+      case 'high':
+        return 'destructive';
+      case 'medium':
+        return 'default';
+      case 'low':
+        return 'secondary';
+      default:
+        return 'outline';
+    }
   };
 
-  const formatDuration = (minutes: number | null) => {
-    if (!minutes) return '--';
+  const formatTime = (timeString: string): string => {
+    if (!timeString) return 'Not set';
+    return timeString;
+  };
+
+  const formatDuration = (minutes: number): string => {
+    if (!minutes) return 'N/A';
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
     return `${hours}h ${mins}m`;
   };
 
+  const formatDate = (dateString: string): string => {
+    try {
+      return format(new Date(dateString), 'MMM d, yyyy');
+    } catch {
+      return dateString;
+    }
+  };
+
+  if (patientLoading) {
+    return (
+      <div className="space-y-6 p-6">
+        <div className="animate-pulse">
+          <div className="h-8 bg-gray-200 rounded w-1/3 mb-4"></div>
+          <div className="h-32 bg-gray-200 rounded"></div>
+        </div>
+      </div>
+    );
+  }
+
+  const latestInsight = insights[0];
+
   return (
-    <div className="min-h-screen bg-black text-white px-4 py-6 space-y-6">
+    <div className="space-y-6 p-6 max-w-4xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Moon className="h-6 w-6 text-green-500" />
-            Sleep Coach
-          </h1>
-          <p className="text-gray-400 text-sm">AI-powered sleep optimization</p>
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-primary/10 rounded-lg">
+            <Moon className="h-6 w-6 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold">Sleep Coach</h1>
+            <p className="text-muted-foreground">AI-powered sleep optimization</p>
+          </div>
         </div>
-        <Button
-          onClick={() => runAnalysis('daily')}
+        <Button 
+          onClick={() => runAnalysis('daily')} 
           disabled={analyzing || !primaryPatientId}
-          variant="outline"
-          size="sm"
-          className="border-gray-700 text-gray-300 hover:bg-gray-800"
+          className="bg-primary hover:bg-primary/90"
         >
           {analyzing ? (
-            <RefreshCw className="h-4 w-4 animate-spin" />
+            <>
+              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+              Analyzing...
+            </>
           ) : (
-            <Brain className="h-4 w-4" />
+            <>
+              <Zap className="h-4 w-4 mr-2" />
+              Analyze
+            </>
           )}
-          {analyzing ? 'Analyzing...' : 'Analyze'}
         </Button>
       </div>
 
-      {/* Hero Score Section */}
+      {/* Latest Analysis Result */}
+      {latestAnalysis && (
+        <Card className="border-green-200 bg-green-50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-green-800">
+              <CheckCircle className="h-5 w-5" />
+              Analysis Complete
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <p className="text-sm font-medium text-green-700">Sleep Score</p>
+                <p className="text-2xl font-bold text-green-800">
+                  {latestAnalysis.analysis_summary.sleep_quality_score}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-green-700">Trend</p>
+                <div className="flex items-center gap-1">
+                  {getTrendIcon(latestAnalysis.analysis_summary.pattern_trend)}
+                  <span className="capitalize text-green-800">
+                    {latestAnalysis.analysis_summary.pattern_trend}
+                  </span>
+                </div>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-green-700">Confidence</p>
+                <p className="text-2xl font-bold text-green-800">
+                  {Math.round(latestAnalysis.analysis_summary.confidence_level * 100)}%
+                </p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-green-700">Data Quality</p>
+                <Badge variant="secondary" className="bg-green-100 text-green-800">
+                  {latestAnalysis.analysis_summary.data_quality?.quality || 'good'}
+                </Badge>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Main Sleep Insight */}
       {latestInsight ? (
-        <Card className="bg-gray-900 border-gray-800">
-          <CardContent className="p-6">
-            <div className="text-center space-y-4">
-              <div className="relative inline-flex items-center justify-center">
-                <div className="w-32 h-32 relative">
-                  <svg className="w-32 h-32 transform -rotate-90" viewBox="0 0 120 120">
-                    <circle
-                      cx="60"
-                      cy="60"
-                      r="50"
-                      stroke="currentColor"
-                      strokeWidth="8"
-                      fill="none"
-                      className="text-gray-700"
-                    />
-                    <circle
-                      cx="60"
-                      cy="60"
-                      r="50"
-                      stroke="currentColor"
-                      strokeWidth="8"
-                      fill="none"
-                      strokeDasharray={`${2 * Math.PI * 50}`}
-                      strokeDashoffset={`${2 * Math.PI * 50 * (1 - latestInsight.sleep_quality_score / 100)}`}
-                      className={`${getScoreColor(latestInsight.sleep_quality_score)} transition-all duration-1000`}
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="text-center">
-                      <div className={`text-3xl font-bold ${getScoreColor(latestInsight.sleep_quality_score)}`}>
-                        {latestInsight.sleep_quality_score}
-                      </div>
-                      <div className="text-xs text-gray-400">RECOVERY</div>
+        <Card className="relative overflow-hidden">
+          <div className={`absolute inset-0 bg-gradient-to-r ${getScoreGradient(latestInsight.sleep_quality_score)} opacity-5`}></div>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <Moon className="h-5 w-5" />
+                Sleep Quality Score
+              </CardTitle>
+              <div className="flex items-center gap-2">
+                {getTrendIcon(latestInsight.sleep_pattern_trend)}
+                <Badge variant="outline">
+                  {formatDate(latestInsight.analysis_date)}
+                </Badge>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Sleep Score Circle */}
+            <div className="flex items-center justify-center">
+              <div className="relative w-32 h-32">
+                <svg className="w-32 h-32 transform -rotate-90" viewBox="0 0 120 120">
+                  <circle
+                    cx="60"
+                    cy="60"
+                    r="54"
+                    stroke="currentColor"
+                    strokeWidth="8"
+                    fill="none"
+                    className="text-gray-200"
+                  />
+                  <circle
+                    cx="60"
+                    cy="60"
+                    r="54"
+                    stroke="currentColor"
+                    strokeWidth="8"
+                    fill="none"
+                    strokeDasharray={`${2 * Math.PI * 54}`}
+                    strokeDashoffset={`${2 * Math.PI * 54 * (1 - latestInsight.sleep_quality_score / 100)}`}
+                    className={getScoreColor(latestInsight.sleep_quality_score)}
+                    strokeLinecap="round"
+                  />
+                </svg>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="text-center">
+                    <div className={`text-3xl font-bold ${getScoreColor(latestInsight.sleep_quality_score)}`}>
+                      {latestInsight.sleep_quality_score}
                     </div>
+                    <div className="text-sm text-muted-foreground">Score</div>
                   </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Key Metrics */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="text-center space-y-1">
+                <div className="flex items-center justify-center">
+                  <Heart className="h-4 w-4 text-red-500 mr-1" />
+                  <span className="text-sm font-medium">Sleep Debt</span>
+                </div>
+                <div className="text-lg font-semibold">
+                  {latestInsight.sleep_debt_hours || 0}h
                 </div>
               </div>
               
-              <div className="flex items-center justify-center gap-2">
-                {getTrendIcon(latestInsight.sleep_pattern_trend)}
-                <span className="text-sm font-medium capitalize">
-                  {latestInsight.sleep_pattern_trend}
-                </span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      ) : (
-        <Card className="bg-gray-900 border-gray-800">
-          <CardContent className="p-6 text-center">
-            <div className="space-y-4">
-              <Moon className="h-16 w-16 text-gray-600 mx-auto" />
-              <div>
-                <h3 className="text-lg font-medium text-gray-300">No Sleep Data</h3>
-                <p className="text-sm text-gray-500">Run an analysis to see your sleep insights</p>
-              </div>
-              <Button
-                onClick={() => runAnalysis('daily')}
-                disabled={analyzing || !primaryPatientId}
-                className="bg-green-600 hover:bg-green-700"
-              >
-                Generate Sleep Analysis
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Key Metrics */}
-      {latestInsight && (
-        <div className="grid grid-cols-2 gap-4">
-          <Card className="bg-gray-900 border-gray-800">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <Clock className="h-4 w-4 text-blue-400" />
-                <span className="text-xs text-gray-400 uppercase tracking-wide">Sleep Debt</span>
-              </div>
-              <div className="text-xl font-bold">
-                {latestInsight.sleep_debt_hours ? `${latestInsight.sleep_debt_hours.toFixed(1)}h` : '--'}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gray-900 border-gray-800">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <Target className="h-4 w-4 text-purple-400" />
-                <span className="text-xs text-gray-400 uppercase tracking-wide">Confidence</span>
-              </div>
-              <div className="text-xl font-bold">
-                {Math.round(latestInsight.confidence_level * 100)}%
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gray-900 border-gray-800">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <Moon className="h-4 w-4 text-indigo-400" />
-                <span className="text-xs text-gray-400 uppercase tracking-wide">Bedtime</span>
-              </div>
-              <div className="text-xl font-bold">
-                {formatTime(latestInsight.optimal_bedtime)}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gray-900 border-gray-800">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <Activity className="h-4 w-4 text-green-400" />
-                <span className="text-xs text-gray-400 uppercase tracking-wide">Duration</span>
-              </div>
-              <div className="text-xl font-bold">
-                {formatDuration(latestInsight.predicted_sleep_duration)}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* AI Recommendations */}
-      {latestInsight?.recommendations && Array.isArray(latestInsight.recommendations) && latestInsight.recommendations.length > 0 && (
-        <Card className="bg-gray-900 border-gray-800">
-          <CardContent className="p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <Lightbulb className="h-5 w-5 text-yellow-500" />
-              <h3 className="text-lg font-semibold">AI Insights</h3>
-            </div>
-            <div className="space-y-3">
-              {(Array.isArray(latestInsight.recommendations) ? latestInsight.recommendations : []).slice(0, 3).map((rec: any, index: number) => (
-                <div key={index} className="flex items-start gap-3 p-3 bg-gray-800 rounded-lg">
-                  <Badge 
-                    variant={rec.priority === 'high' ? 'destructive' : rec.priority === 'medium' ? 'default' : 'secondary'}
-                    className="text-xs mt-1"
-                  >
-                    {rec.priority || 'low'}
-                  </Badge>
-                  <div className="flex-1">
-                    <div className="font-medium text-sm mb-1">{rec.title}</div>
-                    <div className="text-xs text-gray-400">{rec.description}</div>
-                  </div>
+              <div className="text-center space-y-1">
+                <div className="flex items-center justify-center">
+                  <Target className="h-4 w-4 text-blue-500 mr-1" />
+                  <span className="text-sm font-medium">Confidence</span>
                 </div>
-              ))}
+                <div className="text-lg font-semibold">
+                  {Math.round((latestInsight.confidence_level || 0) * 100)}%
+                </div>
+              </div>
+              
+              <div className="text-center space-y-1">
+                <div className="flex items-center justify-center">
+                  <Clock className="h-4 w-4 text-purple-500 mr-1" />
+                  <span className="text-sm font-medium">Optimal Bedtime</span>
+                </div>
+                <div className="text-lg font-semibold">
+                  {formatTime(latestInsight.optimal_bedtime)}
+                </div>
+              </div>
+              
+              <div className="text-center space-y-1">
+                <div className="flex items-center justify-center">
+                  <Activity className="h-4 w-4 text-green-500 mr-1" />
+                  <span className="text-sm font-medium">Duration</span>
+                </div>
+                <div className="text-lg font-semibold">
+                  {formatDuration(latestInsight.predicted_sleep_duration)}
+                </div>
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* AI Recommendations */}
+            {latestInsight.recommendations && latestInsight.recommendations.length > 0 && (
+              <div className="space-y-4">
+                <h3 className="font-semibold flex items-center gap-2">
+                  <Brain className="h-4 w-4" />
+                  AI Recommendations
+                </h3>
+                <div className="space-y-3">
+                  {latestInsight.recommendations.slice(0, 3).map((rec, index) => (
+                    <div key={index} className="p-3 bg-muted rounded-lg">
+                      <div className="flex items-start justify-between mb-2">
+                        <h4 className="font-medium">{rec.title}</h4>
+                        <Badge variant={getPriorityColor(rec.priority)}>
+                          {rec.priority}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground mb-2">
+                        {rec.description}
+                      </p>
+                      <p className="text-sm font-medium">
+                        Action: {rec.action}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      ) : !loading ? (
+        <Card className="text-center py-12">
+          <CardContent>
+            <div className="flex flex-col items-center space-y-4">
+              <div className="p-4 bg-muted rounded-full">
+                <Moon className="h-8 w-8 text-muted-foreground" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold mb-2">No Sleep Data</h3>
+                <p className="text-muted-foreground mb-4">
+                  Run an analysis to see your sleep insights
+                </p>
+                <Button 
+                  onClick={() => runAnalysis('daily')} 
+                  disabled={analyzing || !primaryPatientId}
+                  className="bg-primary hover:bg-primary/90"
+                >
+                  {analyzing ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                      Analyzing...
+                    </>
+                  ) : (
+                    'Generate Sleep Analysis'
+                  )}
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
-      )}
+      ) : null}
 
       {/* Analysis History */}
       {insights.length > 1 && (
-        <Card className="bg-gray-900 border-gray-800">
-          <CardContent className="p-6">
-            <h3 className="text-lg font-semibold mb-4">Recent Analyses</h3>
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5" />
+              Recent Analyses
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
             <div className="space-y-3">
               {insights.slice(1, 4).map((insight) => (
-                <div key={insight.id} className="flex items-center justify-between p-3 bg-gray-800 rounded-lg">
+                <div 
+                  key={insight.id} 
+                  className="flex items-center justify-between p-3 bg-muted rounded-lg"
+                >
                   <div className="flex items-center gap-3">
-                    <div className={`text-lg font-bold ${getScoreColor(insight.sleep_quality_score)}`}>
+                    <div className={`text-lg font-semibold ${getScoreColor(insight.sleep_quality_score)}`}>
                       {insight.sleep_quality_score}
                     </div>
                     <div>
-                      <div className="text-sm font-medium">
-                        {new Date(insight.analysis_date).toLocaleDateString('en-US', { 
-                          month: 'short', 
-                          day: 'numeric' 
-                        })}
-                      </div>
-                      <div className="text-xs text-gray-400 capitalize">
-                        {insight.sleep_pattern_trend}
-                      </div>
+                      <p className="font-medium">{formatDate(insight.analysis_date)}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {insight.analysis_period} analysis
+                      </p>
                     </div>
                   </div>
-                  {getTrendIcon(insight.sleep_pattern_trend)}
+                  <div className="flex items-center gap-2">
+                    {getTrendIcon(insight.sleep_pattern_trend)}
+                    <span className="text-sm capitalize">
+                      {insight.sleep_pattern_trend}
+                    </span>
+                  </div>
                 </div>
               ))}
             </div>
@@ -380,25 +511,61 @@ export const WHOOPSleepAnalysis: React.FC = () => {
         </Card>
       )}
 
-      {/* Action Buttons */}
-      <div className="flex gap-3">
-        <Button
-          onClick={() => runAnalysis('weekly')}
-          disabled={analyzing || !primaryPatientId}
-          variant="outline"
-          className="flex-1 border-gray-700 text-gray-300 hover:bg-gray-800"
-        >
-          Weekly Analysis
-        </Button>
-        <Button
-          onClick={() => runAnalysis('monthly')}
-          disabled={analyzing || !primaryPatientId}
-          variant="outline"
-          className="flex-1 border-gray-700 text-gray-300 hover:bg-gray-800"
-        >
-          Monthly Analysis
-        </Button>
-      </div>
+      {/* Analysis Period Options */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Analysis Options</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Button 
+              variant="outline" 
+              onClick={() => runAnalysis('weekly')}
+              disabled={analyzing}
+              className="h-auto p-4 flex flex-col items-center gap-2"
+            >
+              <Calendar className="h-5 w-5" />
+              <div className="text-center">
+                <div className="font-medium">Weekly Analysis</div>
+                <div className="text-sm text-muted-foreground">7-day patterns</div>
+              </div>
+            </Button>
+            
+            <Button 
+              variant="outline" 
+              onClick={() => runAnalysis('monthly')}
+              disabled={analyzing}
+              className="h-auto p-4 flex flex-col items-center gap-2"
+            >
+              <Calendar className="h-5 w-5" />
+              <div className="text-center">
+                <div className="font-medium">Monthly Analysis</div>
+                <div className="text-sm text-muted-foreground">30-day trends</div>
+              </div>
+            </Button>
+            
+            <Button 
+              variant="outline" 
+              onClick={() => runAnalysis('daily')}
+              disabled={analyzing}
+              className="h-auto p-4 flex flex-col items-center gap-2"
+            >
+              <Zap className="h-5 w-5" />
+              <div className="text-center">
+                <div className="font-medium">Quick Analysis</div>
+                <div className="text-sm text-muted-foreground">Recent data</div>
+              </div>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {loading && (
+        <div className="flex items-center justify-center py-8">
+          <RefreshCw className="h-6 w-6 animate-spin mr-2" />
+          <span>Loading sleep insights...</span>
+        </div>
+      )}
     </div>
   );
 };
