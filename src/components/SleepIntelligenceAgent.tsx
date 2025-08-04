@@ -92,6 +92,17 @@ const SleepIntelligenceAgent: React.FC = () => {
     }
   }, [primaryPatientId]);
 
+  // Auto-refresh insights every 10 seconds when analyzing
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (analyzing) {
+      interval = setInterval(() => {
+        fetchInsights();
+      }, 5000);
+    }
+    return () => clearInterval(interval);
+  }, [analyzing, primaryPatientId]);
+
   const fetchInsights = async () => {
     if (!primaryPatientId) return;
     
@@ -258,55 +269,52 @@ const SleepIntelligenceAgent: React.FC = () => {
   const latestInsight = insights[0];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-primary-light to-background">
-      {/* Header - Sleep Command Center */}
-      <div className="bg-card/80 backdrop-blur-sm border-b border-border/50 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-gradient-to-br from-primary to-primary-glow rounded-xl shadow-lg">
-                <Moon className="h-8 w-8 text-white" />
-              </div>
-              <div>
-                <h1 className="text-3xl font-bold bg-gradient-to-r from-primary to-primary-glow bg-clip-text text-transparent">
-                  Sleep Intelligence Agent
-                </h1>
-                <p className="text-muted-foreground font-medium">AI-powered sleep optimization command center</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <Button 
-                variant="outline"
-                onClick={() => runAnalysis('weekly')} 
-                disabled={analyzing || !primaryPatientId}
-                className="border-primary/30 hover:bg-primary/5"
-              >
-                <Calendar className="h-4 w-4 mr-2" />
-                Weekly
-              </Button>
-              <Button 
-                onClick={() => runAnalysis('daily')} 
-                disabled={analyzing || !primaryPatientId}
-                className="bg-gradient-to-r from-primary to-primary-glow hover:from-primary/90 hover:to-primary-glow/90 text-white shadow-lg"
-              >
-                {analyzing ? (
-                  <>
-                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                    Analyzing...
-                  </>
-                ) : (
-                  <>
-                    <Zap className="h-4 w-4 mr-2" />
-                    Analyze Now
-                  </>
-                )}
-              </Button>
-            </div>
+    <div className="w-full space-y-6">
+      {/* Header Section */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-gradient-to-br from-primary to-primary-glow rounded-lg shadow-lg">
+            <Moon className="h-6 w-6 text-white" />
           </div>
+          <div>
+            <h2 className="text-xl font-bold bg-gradient-to-r from-primary to-primary-glow bg-clip-text text-transparent">
+              Sleep Intelligence Agent
+            </h2>
+            <p className="text-sm text-muted-foreground">AI-powered sleep optimization</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button 
+            variant="outline"
+            size="sm"
+            onClick={() => runAnalysis('weekly')} 
+            disabled={analyzing || !primaryPatientId}
+          >
+            <Calendar className="h-3 w-3 mr-1" />
+            Weekly
+          </Button>
+          <Button 
+            size="sm"
+            onClick={() => runAnalysis('daily')} 
+            disabled={analyzing || !primaryPatientId}
+            className="bg-gradient-to-r from-primary to-primary-glow text-white"
+          >
+            {analyzing ? (
+              <>
+                <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+                Analyzing...
+              </>
+            ) : (
+              <>
+                <Zap className="h-3 w-3 mr-1" />
+                Analyze
+              </>
+            )}
+          </Button>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 py-6 space-y-8">
+      <div className="space-y-6">
         {/* Main Sleep Score Dashboard */}
         {latestInsight ? (
           <Card className="relative overflow-hidden shadow-card-custom bg-gradient-to-br from-card to-card/80 backdrop-blur-sm border-border/50">
