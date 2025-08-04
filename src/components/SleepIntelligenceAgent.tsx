@@ -266,6 +266,42 @@ const SleepIntelligenceAgent: React.FC = () => {
     );
   }
 
+  // Show loading state only when analyzing and no insights exist yet
+  if (analyzing && insights.length === 0) {
+    return (
+      <div className="w-full space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-gradient-to-br from-primary to-primary-glow rounded-lg shadow-lg">
+              <Moon className="h-6 w-6 text-white" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold bg-gradient-to-r from-primary to-primary-glow bg-clip-text text-transparent">
+                Sleep Intelligence Agent
+              </h2>
+              <p className="text-sm text-muted-foreground">Analyzing your sleep data...</p>
+            </div>
+          </div>
+          <Button size="sm" disabled className="bg-gradient-to-r from-primary to-primary-glow text-white">
+            <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+            Analyzing...
+          </Button>
+        </div>
+        <Card className="p-8">
+          <div className="flex flex-col items-center text-center space-y-4">
+            <div className="animate-spin">
+              <Moon className="h-12 w-12 text-primary" />
+            </div>
+            <div className="space-y-2">
+              <h3 className="text-lg font-semibold">AI Sleep Analysis in Progress</h3>
+              <p className="text-muted-foreground">Processing your sleep patterns and generating insights...</p>
+            </div>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
   const latestInsight = insights[0];
 
   return (
