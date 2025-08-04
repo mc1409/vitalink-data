@@ -50,6 +50,72 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_sleep_insights: {
+        Row: {
+          agent_version: string | null
+          analysis_date: string
+          analysis_period: string
+          confidence_level: number | null
+          created_at: string
+          data_sources_used: Json | null
+          id: string
+          key_factors: Json | null
+          next_analysis_date: string | null
+          optimal_bedtime: string | null
+          optimal_wake_time: string | null
+          patient_id: string
+          predicted_sleep_duration: number | null
+          processing_time_ms: number | null
+          recommendations: Json | null
+          sleep_debt_hours: number | null
+          sleep_pattern_trend: string | null
+          sleep_quality_score: number | null
+          updated_at: string
+        }
+        Insert: {
+          agent_version?: string | null
+          analysis_date: string
+          analysis_period?: string
+          confidence_level?: number | null
+          created_at?: string
+          data_sources_used?: Json | null
+          id?: string
+          key_factors?: Json | null
+          next_analysis_date?: string | null
+          optimal_bedtime?: string | null
+          optimal_wake_time?: string | null
+          patient_id: string
+          predicted_sleep_duration?: number | null
+          processing_time_ms?: number | null
+          recommendations?: Json | null
+          sleep_debt_hours?: number | null
+          sleep_pattern_trend?: string | null
+          sleep_quality_score?: number | null
+          updated_at?: string
+        }
+        Update: {
+          agent_version?: string | null
+          analysis_date?: string
+          analysis_period?: string
+          confidence_level?: number | null
+          created_at?: string
+          data_sources_used?: Json | null
+          id?: string
+          key_factors?: Json | null
+          next_analysis_date?: string | null
+          optimal_bedtime?: string | null
+          optimal_wake_time?: string | null
+          patient_id?: string
+          predicted_sleep_duration?: number | null
+          processing_time_ms?: number | null
+          recommendations?: Json | null
+          sleep_debt_hours?: number | null
+          sleep_pattern_trend?: string | null
+          sleep_quality_score?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       biomarker_activity: {
         Row: {
           active_calories: number | null
