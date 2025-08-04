@@ -137,12 +137,19 @@ Important guidelines:
     const data = await response.json();
     const interpretationText = data.choices[0].message.content;
 
-    // Parse the JSON response
+    // Parse the JSON response, handling markdown code blocks
     let interpretation;
     try {
-      interpretation = JSON.parse(interpretationText);
+      // Remove markdown code blocks if present
+      const cleanedText = interpretationText
+        .replace(/```json\n?/g, '')
+        .replace(/```\n?/g, '')
+        .trim();
+      
+      interpretation = JSON.parse(cleanedText);
     } catch (parseError) {
       console.error('Error parsing AI response:', parseError);
+      console.error('Raw response:', interpretationText);
       throw new Error('Failed to parse AI interpretation');
     }
 
