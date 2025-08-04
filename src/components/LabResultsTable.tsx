@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { AlertTriangle, TrendingUp, TrendingDown, Calendar, Filter } from 'lucide-react';
+import { AlertTriangle, TrendingUp, TrendingDown, Calendar, Filter, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import DocumentSourceLink from './DocumentSourceLink';
+import LabResultDetail from './LabResultDetail';
 
 interface LabResult {
   id: string;
@@ -41,6 +42,8 @@ const LabResultsTable: React.FC<LabResultsTableProps> = ({ patientId }) => {
   const [error, setError] = useState<string | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<'date' | 'name' | 'category'>('date');
+  const [selectedLabResult, setSelectedLabResult] = useState<LabResult | null>(null);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
 
   useEffect(() => {
     fetchLabResults();
@@ -75,6 +78,16 @@ const LabResultsTable: React.FC<LabResultsTableProps> = ({ patientId }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleRowClick = (result: LabResult) => {
+    setSelectedLabResult(result);
+    setIsDetailOpen(true);
+  };
+
+  const handleDetailClose = () => {
+    setIsDetailOpen(false);
+    setSelectedLabResult(null);
   };
 
   const getStatusBadge = (result: LabResult) => {
@@ -240,11 +253,16 @@ const LabResultsTable: React.FC<LabResultsTableProps> = ({ patientId }) => {
                   <TableHead>Status</TableHead>
                   <TableHead>Date</TableHead>
                   <TableHead>Source</TableHead>
+                  <TableHead>Details</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredAndSortedResults.map((result) => (
-                  <TableRow key={result.id}>
+                  <TableRow 
+                    key={result.id} 
+                    className="cursor-pointer hover:bg-muted/50 transition-colors"
+                    onClick={() => handleRowClick(result)}
+                  >
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-2">
                         {result.test_name}
@@ -290,12 +308,26 @@ const LabResultsTable: React.FC<LabResultsTableProps> = ({ patientId }) => {
                         )}
                       </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
                       <DocumentSourceLink
                         sourceDocumentId={result.source_document_id}
                         documentInfo={result.document_processing_logs}
                         dataSource={result.data_source}
                       />
+                    </TableCell>
+                    <TableCell>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="flex items-center gap-1"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRowClick(result);
+                        }}
+                      >
+                        <Eye className="h-4 w-4" />
+                        View Details
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -304,6 +336,14 @@ const LabResultsTable: React.FC<LabResultsTableProps> = ({ patientId }) => {
           </div>
         )}
       </CardContent>
+
+      {/* Lab Result Detail Modal */}
+      <LabResultDetail
+        labResult={selectedLabResult}
+        patientId={patientId}
+        isOpen={isDetailOpen}
+        onClose={handleDetailClose}
+      />
     </Card>
   );
 };
