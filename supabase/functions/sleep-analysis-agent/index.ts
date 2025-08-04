@@ -566,8 +566,8 @@ serve(async (req) => {
     // Initialize the agent
     const agent = new SleepAnalysisAgent();
 
-    // API Routes
-    if (pathname === '/sleep-analysis-agent/analyze' && req.method === 'POST') {
+    // API Routes - Handle both root and /analyze endpoint
+    if ((pathname === '/sleep-analysis-agent/analyze' || pathname === '/' || pathname === '') && req.method === 'POST') {
       const { patient_id, analysis_period = 'daily', force_refresh = false }: SleepAnalysisRequest = await req.json();
       
       if (!patient_id) {
