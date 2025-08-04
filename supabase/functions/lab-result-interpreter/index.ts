@@ -44,6 +44,11 @@ serve(async (req) => {
     const azureDeployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
 
     if (!azureApiKey || !azureEndpoint || !azureDeployment) {
+      console.error('Missing Azure OpenAI configuration:', {
+        hasApiKey: !!azureApiKey,
+        hasEndpoint: !!azureEndpoint,
+        hasDeployment: !!azureDeployment
+      });
       throw new Error('Azure OpenAI configuration missing');
     }
 
@@ -107,6 +112,7 @@ Important guidelines:
 - If the result is normal, focus on maintenance and prevention`;
 
     // Call Azure OpenAI
+    console.log('Calling Azure OpenAI with endpoint:', azureEndpoint);
     const response = await fetch(`${azureEndpoint}/openai/deployments/${azureDeployment}/chat/completions?api-version=2024-08-01-preview`, {
       method: 'POST',
       headers: {
@@ -131,11 +137,21 @@ Important guidelines:
     });
 
     if (!response.ok) {
-      throw new Error(`Azure OpenAI API error: ${response.status}`);
+      const errorText = await response.text();
+      console.error(`Azure OpenAI API error: ${response.status} - ${errorText}`);
+      throw new Error(`Azure OpenAI API error: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
+    console.log('Azure OpenAI response received');
+    
+    if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+      console.error('Invalid Azure OpenAI response structure:', data);
+      throw new Error('Invalid response from Azure OpenAI');
+    }
+    
     const interpretationText = data.choices[0].message.content;
+    console.log('Raw AI response length:', interpretationText?.length);
 
     // Parse the JSON response, handling markdown code blocks
     let interpretation;
@@ -146,11 +162,45 @@ Important guidelines:
         .replace(/```\n?/g, '')
         .trim();
       
+      console.log('Cleaned text preview:', cleanedText.substring(0, 200));
       interpretation = JSON.parse(cleanedText);
+      console.log('Successfully parsed AI interpretation');
     } catch (parseError) {
       console.error('Error parsing AI response:', parseError);
-      console.error('Raw response:', interpretationText);
-      throw new Error('Failed to parse AI interpretation');
+      console.error('Raw response preview:', interpretationText?.substring(0, 500));
+      
+      // Return a fallback response instead of throwing
+      interpretation = {
+        lab_result_id: labResult.id,
+        test_overview: {
+          what_it_measures: `${labResult.test_name} is a ${labResult.test_category} test`,
+          normal_function: "This test measures important health parameters",
+          aliases: []
+        },
+        result_interpretation: {
+          status: labResult.is_out_of_range ? "abnormal" : "normal",
+          meaning: `Your ${labResult.test_name} result is ${labResult.result_value} ${labResult.unit || ''}`,
+          significance: "Please consult your healthcare provider for detailed interpretation",
+          risk_level: "low"
+        },
+        health_implications: {
+          immediate_concerns: "None identified",
+          long_term_effects: "Consult your healthcare provider",
+          related_conditions: []
+        },
+        recommendations: {
+          lifestyle_changes: ["Maintain a healthy lifestyle"],
+          dietary_suggestions: ["Follow a balanced diet"],
+          monitoring: "Regular follow-up as recommended by your doctor",
+          follow_up: "Discuss with your healthcare provider"
+        },
+        educational_notes: {
+          factors_affecting_results: ["Various factors can affect test results"],
+          when_to_be_concerned: "Contact your healthcare provider if you have concerns",
+          improvement_timeline: "Varies by individual"
+        },
+        fallback: true
+      };
     }
 
     // Add metadata
