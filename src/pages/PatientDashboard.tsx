@@ -4,6 +4,7 @@ import { Heart } from 'lucide-react';
 import PatientSelector from '@/components/PatientSelector';
 import HealthIntelligenceDashboard from '@/components/HealthIntelligenceDashboard';
 import EnhancedHealthIntelligenceDashboard from '@/components/EnhancedHealthIntelligenceDashboard';
+import LabResultsTable from '@/components/LabResultsTable';
 import { usePatient } from '@/contexts/PatientContext';
 
 const PatientDashboard = () => {
@@ -40,6 +41,11 @@ const PatientDashboard = () => {
         selectedPatientId={primaryPatient?.id || null}
         onPatientSelect={() => {}} 
       />
+
+      {/* Lab Results Table */}
+      {primaryPatient?.id && (
+        <LabResultsTable patientId={primaryPatient.id} />
+      )}
 
       {/* Enhanced Health Intelligence Dashboard - Single Rolling Page with Full Explanations */}
       {primaryPatient?.id ? (
