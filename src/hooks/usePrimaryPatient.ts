@@ -39,11 +39,12 @@ export const usePrimaryPatient = () => {
         }
 
         if (profile?.primary_patient_id) {
-          // Get the primary patient details
+          // Get the primary patient details - MUST also check user_id for security
           const { data: patient, error: patientError } = await supabase
             .from('patients')
             .select('id, first_name, last_name, date_of_birth, gender')
             .eq('id', profile.primary_patient_id)
+            .eq('user_id', user.id)
             .single();
 
           if (patientError) {
@@ -106,6 +107,7 @@ export const usePrimaryPatient = () => {
               .from('patients')
               .select('id, first_name, last_name, date_of_birth, gender')
               .eq('id', profile.primary_patient_id)
+              .eq('user_id', user.id)
               .single();
 
             if (patientError) throw patientError;
