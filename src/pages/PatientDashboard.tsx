@@ -36,6 +36,14 @@ const PatientDashboard = () => {
             : 'Comprehensive health intelligence and medical analytics'
           }
         </p>
+        {/* Display Patient ID */}
+        {primaryPatient && (
+          <div className="mt-2 p-2 bg-muted rounded-lg inline-block">
+            <span className="text-sm font-mono text-muted-foreground">
+              Patient ID: <span className="font-semibold text-foreground">{primaryPatient.id}</span>
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Patient Selector */}

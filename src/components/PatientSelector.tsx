@@ -130,8 +130,13 @@ const PatientSelector: React.FC<PatientSelectorProps> = ({
           Patient Selection
         </CardTitle>
         <CardDescription>
-          Select a patient to view and manage their health data. 
-          Current primary patient: {primaryPatient ? `${primaryPatient.first_name} ${primaryPatient.last_name}` : 'None selected'}
+          Select a patient to view and manage their health data.
+          {primaryPatient && (
+            <div className="mt-2 p-2 bg-muted rounded text-sm">
+              <div><strong>Current Patient:</strong> {primaryPatient.first_name} {primaryPatient.last_name}</div>
+              <div><strong>Patient ID:</strong> <span className="font-mono">{primaryPatient.id}</span></div>
+            </div>
+          )}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

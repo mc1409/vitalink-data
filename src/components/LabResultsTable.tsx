@@ -169,6 +169,9 @@ const LabResultsTable: React.FC<LabResultsTableProps> = ({ patientId }) => {
         </CardTitle>
         <CardDescription>
           Comprehensive blood work and laboratory test results
+          <div className="mt-2 p-2 bg-muted rounded text-sm">
+            <strong>Patient ID:</strong> <span className="font-mono">{patientId}</span>
+          </div>
         </CardDescription>
         
         {/* Filters */}
