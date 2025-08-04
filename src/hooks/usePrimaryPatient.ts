@@ -27,35 +27,18 @@ export const usePrimaryPatient = () => {
         setLoading(true);
         setError(null);
 
-        // First get the user's profile to find their primary patient
-        const { data: profile, error: profileError } = await supabase
-          .from('profiles')
-          .select('primary_patient_id')
+        // Get the primary patient directly from user_patients table
+        const { data: patient, error: patientError } = await supabase
+          .from('user_patients')
+          .select('id, first_name, last_name, date_of_birth, gender')
           .eq('user_id', user.id)
+          .eq('is_primary', true)
           .single();
 
-        if (profileError) {
-          throw profileError;
-        }
-
-        if (profile?.primary_patient_id) {
-          // Get the primary patient details - MUST also check user_id for security
-          const { data: patient, error: patientError } = await supabase
-            .from('patients')
-            .select('id, first_name, last_name, date_of_birth, gender')
-            .eq('id', profile.primary_patient_id)
-            .eq('user_id', user.id)
-            .single();
-
-          if (patientError) {
-            throw patientError;
-          }
-
-          setPrimaryPatient(patient);
-        } else {
-          // If no primary patient set, get the first patient for this user
+        if (patientError) {
+          // If no primary patient found, get the first patient and set as primary
           const { data: patients, error: patientsError } = await supabase
-            .from('patients')
+            .from('user_patients')
             .select('id, first_name, last_name, date_of_birth, gender')
             .eq('user_id', user.id)
             .order('created_at')
@@ -66,14 +49,16 @@ export const usePrimaryPatient = () => {
           }
 
           if (patients && patients.length > 0) {
-            setPrimaryPatient(patients[0]);
-            
-            // Update the profile to set this as primary patient
+            // Set the first patient as primary
             await supabase
-              .from('profiles')
-              .update({ primary_patient_id: patients[0].id })
-              .eq('user_id', user.id);
+              .from('user_patients')
+              .update({ is_primary: true })
+              .eq('id', patients[0].id);
+
+            setPrimaryPatient(patients[0]);
           }
+        } else {
+          setPrimaryPatient(patient);
         }
       } catch (err: any) {
         console.error('Error fetching primary patient:', err);
@@ -89,30 +74,20 @@ export const usePrimaryPatient = () => {
   const refreshPrimaryPatient = () => {
     if (user) {
       setLoading(true);
-      // Re-trigger the effect by updating a state
       const fetchPrimaryPatient = async () => {
         try {
           setError(null);
 
-          const { data: profile, error: profileError } = await supabase
-            .from('profiles')
-            .select('primary_patient_id')
+          // Get the primary patient directly from user_patients table
+          const { data: patient, error: patientError } = await supabase
+            .from('user_patients')
+            .select('id, first_name, last_name, date_of_birth, gender')
             .eq('user_id', user.id)
+            .eq('is_primary', true)
             .single();
 
-          if (profileError) throw profileError;
-
-          if (profile?.primary_patient_id) {
-            const { data: patient, error: patientError } = await supabase
-              .from('patients')
-              .select('id, first_name, last_name, date_of_birth, gender')
-              .eq('id', profile.primary_patient_id)
-              .eq('user_id', user.id)
-              .single();
-
-            if (patientError) throw patientError;
-            setPrimaryPatient(patient);
-          }
+          if (patientError) throw patientError;
+          setPrimaryPatient(patient);
         } catch (err: any) {
           setError(err.message);
         } finally {

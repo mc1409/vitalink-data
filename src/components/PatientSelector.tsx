@@ -49,9 +49,9 @@ const PatientSelector: React.FC<PatientSelectorProps> = ({
         throw new Error('User not authenticated');
       }
 
-      // Get patients directly by user_id - simplified approach
+      // Get patients directly by user_id from new user_patients table
       const { data, error } = await supabase
-        .from('patients')
+        .from('user_patients')
         .select('id, first_name, last_name, date_of_birth, gender, user_id')
         .eq('user_id', user.data.user.id)
         .order('first_name');
@@ -78,21 +78,20 @@ const PatientSelector: React.FC<PatientSelectorProps> = ({
         throw new Error('User not authenticated');
       }
 
-      // Get user's profile to link patient
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('user_id', user.data.user.id)
-        .maybeSingle();
+      // Check if this is the user's first patient
+      const { data: existingPatients } = await supabase
+        .from('user_patients')
+        .select('id', { count: 'exact' })
+        .eq('user_id', user.data.user.id);
 
-      if (profileError) throw profileError;
+      const isFirstPatient = !existingPatients || existingPatients.length === 0;
 
       const { data, error } = await supabase
-        .from('patients')
+        .from('user_patients')
         .insert({
           ...newPatient,
           user_id: user.data.user.id,
-          profile_id: profile?.id || null // Optional link to profile
+          is_primary: isFirstPatient // First patient is automatically primary
         })
         .select()
         .single();

@@ -13,8 +13,7 @@ const corsHeaders = {
 const databaseSchema = `
 Available tables and their key columns:
 
-1. profiles: user_id, display_name, date_of_birth, gender
-2. patients: id, user_id, first_name, last_name, date_of_birth, gender, medical_record_number
+1. user_patients: id, user_id, first_name, last_name, date_of_birth, gender, is_primary, medical_record_number
 3. lab_tests: id, patient_id, test_name, test_category, order_date, result_date, test_status
 4. lab_results: id, lab_test_id, result_name, numeric_value, text_value, units, abnormal_flag
 5. heart_metrics: id, user_id, measurement_timestamp, resting_heart_rate, average_heart_rate, max_heart_rate, hrv_score
@@ -27,8 +26,8 @@ Available tables and their key columns:
 12. document_processing_logs: id, user_id, filename, processing_status, ai_analysis_status, created_at
 
 Key relationships:
-- profiles.user_id links to patients.user_id (one user can have multiple patients)
-- patients.id links to lab_tests.patient_id, imaging_studies.patient_id, etc.
+- user_patients.user_id links to auth users (one user can have multiple patients)
+- user_patients.id links to lab_tests.patient_id, imaging_studies.patient_id, etc.
 - lab_tests.id links to lab_results.lab_test_id
 - All metrics tables link directly to user_id from auth
 `;
@@ -65,7 +64,7 @@ serve(async (req) => {
     8. Use meaningful column aliases when helpful
     
     Examples:
-    - "patients with heart rate above 100" → SELECT p.first_name, p.last_name, h.resting_heart_rate FROM patients p JOIN heart_metrics h ON p.user_id = h.user_id WHERE h.resting_heart_rate > 100 LIMIT 20;
+    - "patients with heart rate above 100" → SELECT p.first_name, p.last_name, h.resting_heart_rate FROM user_patients p JOIN heart_metrics h ON p.user_id = h.user_id WHERE h.resting_heart_rate > 100 LIMIT 20;
     - "recent lab results" → SELECT lr.result_name, lr.numeric_value, lr.units, lt.test_date FROM lab_results lr JOIN lab_tests lt ON lr.lab_test_id = lt.id ORDER BY lt.test_date DESC LIMIT 10;
     `;
 

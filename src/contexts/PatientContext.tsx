@@ -51,48 +51,23 @@ export const PatientProvider: React.FC<{ children: React.ReactNode }> = ({ child
         userEmail: user.email
       });
 
-      // First get the user's profile to find their primary patient
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('primary_patient_id')
+      // Get the primary patient directly from user_patients table
+      const { data: patient, error: patientError } = await supabase
+        .from('user_patients')
+        .select('id, first_name, last_name, date_of_birth, gender, user_id')
         .eq('user_id', user.id)
+        .eq('is_primary', true)
         .single();
 
-      console.log('🔍 PROFILE QUERY RESULT:', {
-        profile: profile,
-        error: profileError,
-        primaryPatientId: profile?.primary_patient_id
+      console.log('🔍 PRIMARY PATIENT QUERY RESULT:', {
+        patient: patient,
+        error: patientError
       });
 
-      if (profileError) {
-        console.error('❌ PROFILE ERROR:', profileError);
-        throw profileError;
-      }
-
-      if (profile?.primary_patient_id) {
-        // Get the primary patient details
-        const { data: patient, error: patientError } = await supabase
-          .from('patients')
-          .select('id, first_name, last_name, date_of_birth, gender, user_id')
-          .eq('id', profile.primary_patient_id)
-          .single();
-
-        console.log('🔍 PRIMARY PATIENT QUERY RESULT:', {
-          patient: patient,
-          error: patientError
-        });
-
-        if (patientError) {
-          console.error('❌ PATIENT ERROR:', patientError);
-          throw patientError;
-        }
-
-        setPrimaryPatientState(patient);
-        console.log('✅ PRIMARY PATIENT SET:', patient);
-      } else {
-        // If no primary patient set, get the first patient for this user
+      if (patientError) {
+        // If no primary patient found, get the first patient and set as primary
         const { data: patients, error: patientsError } = await supabase
-          .from('patients')
+          .from('user_patients')
           .select('id, first_name, last_name, date_of_birth, gender, user_id')
           .eq('user_id', user.id)
           .order('created_at')
@@ -110,24 +85,21 @@ export const PatientProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
 
         if (patients && patients.length > 0) {
-          setPrimaryPatientState(patients[0]);
-          console.log('✅ FALLBACK PATIENT SET:', patients[0]);
-          
-          // Update the profile to set this as primary patient
-          const { error: updateError } = await supabase
-            .from('profiles')
-            .update({ primary_patient_id: patients[0].id })
-            .eq('user_id', user.id);
+          // Set the first patient as primary
+          await supabase
+            .from('user_patients')
+            .update({ is_primary: true })
+            .eq('id', patients[0].id);
 
-          if (updateError) {
-            console.error('❌ PROFILE UPDATE ERROR:', updateError);
-          } else {
-            console.log('✅ PROFILE UPDATED with primary patient ID:', patients[0].id);
-          }
+          setPrimaryPatientState(patients[0]);
+          console.log('✅ FALLBACK PATIENT SET AS PRIMARY:', patients[0]);
         } else {
           console.log('⚠️ NO PATIENTS FOUND for user:', user.id);
           setPrimaryPatientState(null);
         }
+      } else {
+        setPrimaryPatientState(patient);
+        console.log('✅ PRIMARY PATIENT SET:', patient);
       }
     } catch (err: any) {
       console.error('❌ ERROR FETCHING PRIMARY PATIENT:', err);
@@ -152,10 +124,17 @@ export const PatientProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     try {
-      // Update the profile to set the new primary patient
+      // Clear any existing primary patient
+      await supabase
+        .from('user_patients')
+        .update({ is_primary: false })
+        .eq('user_id', user.id);
+
+      // Set the new primary patient
       const { error: updateError } = await supabase
-        .from('profiles')
-        .update({ primary_patient_id: patientId })
+        .from('user_patients')
+        .update({ is_primary: true })
+        .eq('id', patientId)
         .eq('user_id', user.id);
 
       if (updateError) {
@@ -177,11 +156,20 @@ export const PatientProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
 
     try {
+      // Check if this is the user's first patient
+      const { data: existingPatients } = await supabase
+        .from('user_patients')
+        .select('id', { count: 'exact' })
+        .eq('user_id', user.id);
+
+      const isFirstPatient = !existingPatients || existingPatients.length === 0;
+
       const { data: newPatient, error: createError } = await supabase
-        .from('patients')
+        .from('user_patients')
         .insert({
           ...patientData,
-          user_id: user.id
+          user_id: user.id,
+          is_primary: isFirstPatient // First patient is automatically primary
         })
         .select()
         .single();
@@ -190,9 +178,8 @@ export const PatientProvider: React.FC<{ children: React.ReactNode }> = ({ child
         return { error: createError };
       }
 
-      // If this is the first patient, set it as primary
-      if (!primaryPatient) {
-        await setPrimaryPatient(newPatient.id);
+      if (isFirstPatient) {
+        setPrimaryPatientState(newPatient);
       }
 
       return { error: null, patient: newPatient };
