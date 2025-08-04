@@ -230,13 +230,17 @@ export class DatabaseMapper {
   }
 
   // Insert validated data into database
-  static async insertData(tableName: string, validatedData: any[]): Promise<InsertResult> {
+  static async insertData(tableName: string, validatedData: any[], sourceDocumentId?: string): Promise<InsertResult> {
     try {
       console.log(`Inserting ${validatedData.length} records into ${tableName}:`, validatedData);
 
-      // Remove metadata fields before insertion
+      // Remove metadata fields and add source document ID if provided
       const cleanData = validatedData.map(record => {
         const { _confidence, _validation_flags, ...cleanRecord } = record;
+        // Add source_document_id to lab test data if provided
+        if (sourceDocumentId && tableName === 'clinical_diagnostic_lab_tests') {
+          cleanRecord.source_document_id = sourceDocumentId;
+        }
         return cleanRecord;
       });
 
@@ -349,7 +353,7 @@ export class DatabaseMapper {
   }
 
   // Process all extracted data
-  static async processExtractedData(extractedFields: any): Promise<{
+  static async processExtractedData(extractedFields: any, sourceDocumentId?: string): Promise<{
     results: InsertResult[];
     totalProcessed: number;
     totalErrors: number;
@@ -397,7 +401,7 @@ export class DatabaseMapper {
       }
 
       // Insert unique records
-      const insertResult = await this.insertData(tableName, unique);
+      const insertResult = await this.insertData(tableName, unique, sourceDocumentId);
       results.push(insertResult);
       
       if (insertResult.success) {

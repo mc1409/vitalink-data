@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
+import DocumentSourceLink from './DocumentSourceLink';
 
 interface LabResult {
   id: string;
@@ -22,6 +23,12 @@ interface LabResult {
   result_date: string | null;
   sample_type: string | null;
   data_source: string;
+  source_document_id?: string;
+  document_processing_logs?: {
+    filename: string;
+    storage_path: string;
+    created_at: string;
+  };
 }
 
 interface LabResultsTableProps {
@@ -46,7 +53,14 @@ const LabResultsTable: React.FC<LabResultsTableProps> = ({ patientId }) => {
 
       const { data, error: fetchError } = await supabase
         .from('clinical_diagnostic_lab_tests')
-        .select('*')
+        .select(`
+          *,
+          document_processing_logs:source_document_id (
+            filename,
+            storage_path,
+            created_at
+          )
+        `)
         .eq('patient_id', patientId)
         .order('collection_date', { ascending: false });
 
@@ -277,9 +291,11 @@ const LabResultsTable: React.FC<LabResultsTableProps> = ({ patientId }) => {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="secondary" className="text-xs">
-                        {result.data_source}
-                      </Badge>
+                      <DocumentSourceLink
+                        sourceDocumentId={result.source_document_id}
+                        documentInfo={result.document_processing_logs}
+                        dataSource={result.data_source}
+                      />
                     </TableCell>
                   </TableRow>
                 ))}

@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { DatabaseMapper } from '@/utils/DatabaseMapper';
 
 interface PatientDocumentUploadProps {
   patientId: string;
@@ -124,41 +125,12 @@ const PatientDocumentUpload: React.FC<PatientDocumentUploadProps> = ({
 
       if (processError) throw processError;
 
-      // Step 5: Save extracted data to database
-      const extractedData = processResult.extractedFields || {};
-      let savedCount = 0;
-
-      // Save lab results
-      for (const [key, labData] of Object.entries(extractedData)) {
-        if (key.startsWith('LAB_RESULTS') && labData && typeof labData === 'object') {
-          try {
-            const data = labData as any;
-            const { error: saveError } = await supabase
-              .from('clinical_diagnostic_lab_tests')
-              .insert({
-                patient_id: patientId,
-                test_name: data.result_name,
-                test_category: 'lab_work',
-                test_type: 'blood_chemistry',
-                numeric_value: data.numeric_value,
-                result_value: data.numeric_value?.toString(),
-                unit: data.units,
-                reference_range_min: data.reference_range_min,
-                reference_range_max: data.reference_range_max,
-                measurement_time: new Date().toISOString(),
-                data_source: 'document_upload'
-              });
-            
-            if (!saveError) {
-              savedCount++;
-            } else {
-              console.error('Failed to save lab result:', saveError);
-            }
-          } catch (saveError) {
-            console.error('Error saving lab result:', saveError);
-          }
-        }
-      }
+      // Step 5: Save extracted data to database using DatabaseMapper
+      console.log('Processing extracted data with DatabaseMapper...');
+      const processingResult = await DatabaseMapper.processExtractedData(processResult.extracted_fields, logEntry.id);
+      
+      console.log('DatabaseMapper processing result:', processingResult);
+      const savedCount = processingResult.totalProcessed;
 
       // Update processing log with final status
       await supabase

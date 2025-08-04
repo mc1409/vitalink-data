@@ -762,6 +762,7 @@ export type Database = {
           result_date: string | null
           result_value: string | null
           sample_type: string | null
+          source_document_id: string | null
           test_category: string
           test_name: string
           test_type: string
@@ -783,6 +784,7 @@ export type Database = {
           result_date?: string | null
           result_value?: string | null
           sample_type?: string | null
+          source_document_id?: string | null
           test_category: string
           test_name: string
           test_type: string
@@ -804,13 +806,22 @@ export type Database = {
           result_date?: string | null
           result_value?: string | null
           sample_type?: string | null
+          source_document_id?: string | null
           test_category?: string
           test_name?: string
           test_type?: string
           unit?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "clinical_diagnostic_lab_tests_source_document_id_fkey"
+            columns: ["source_document_id"]
+            isOneToOne: false
+            referencedRelation: "document_processing_logs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       device_integrations: {
         Row: {
