@@ -829,7 +829,7 @@ serve(async (req) => {
     const agent = new SleepAnalysisAgent();
 
     // Handle POST requests for analysis (both root and specific endpoint)
-    if ((pathname === '/' || pathname === '' || pathname === '/sleep-analysis-agent/analyze') && req.method === 'POST') {
+    if ((pathname === '/' || pathname === '' || pathname === '/sleep-analysis-agent' || pathname === '/sleep-analysis-agent/analyze') && req.method === 'POST') {
       console.log('📝 Processing analysis request...');
       
       const requestBody = await req.json();
