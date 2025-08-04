@@ -22,7 +22,7 @@ const healthAgents = [
     color: '#00ff88',
     description: 'AI sleep analysis using biomarker patterns',
     metrics: { accuracy: 92, insights: 47, recommendations: 12 },
-    component: <WHOOPSleepAnalysis />
+    component: WHOOPSleepAnalysis
   },
   {
     id: 'heart-optimizer',
