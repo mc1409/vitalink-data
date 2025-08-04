@@ -182,13 +182,8 @@ const RolesGPTHealth = () => {
   };
 
   const handleAgentClick = (agent) => {
-    if (agent.id === 'sleep-analysis') {
-      navigate('/sleep-intelligence');
-    } else if (agent.id === 'activity-coach') {
-      navigate('/activity-analysis');
-    } else {
-      setSelectedAgent(agent);
-    }
+    // Navigate to unified health agent page
+    navigate(`/health-agent/${agent.id}`);
   };
 
   const AgentCard = ({ agent }) => (
