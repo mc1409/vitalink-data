@@ -402,3 +402,5 @@ export const WHOOPSleepAnalysis: React.FC = () => {
     </div>
   );
 };
+
+export default WHOOPSleepAnalysis;
