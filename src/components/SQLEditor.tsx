@@ -33,7 +33,7 @@ ORDER BY table_name;`
     },
     {
       name: "All Patients",
-      query: "SELECT first_name, last_name, date_of_birth, gender, email FROM patients ORDER BY created_at DESC LIMIT 20;"
+      query: "SELECT first_name, last_name, date_of_birth, gender, is_primary FROM user_patients ORDER BY created_at DESC LIMIT 20;"
     },
     {
       name: "All Lab Test Results",
@@ -143,7 +143,7 @@ ORDER BY total_tests DESC;`
     COALESCE((SELECT MAX(measurement_time) FROM biomarker_sleep WHERE patient_id = p.id), '1900-01-01'::timestamp),
     COALESCE((SELECT MAX(measurement_time) FROM clinical_diagnostic_lab_tests WHERE patient_id = p.id), '1900-01-01'::timestamp)
   ) as latest_data
-FROM patients p
+FROM user_patients p
 ORDER BY latest_data DESC;`
     }
   ];

@@ -321,7 +321,7 @@ const PDFUploadProcessor: React.FC = () => {
         console.log('📝 INSERTING PATIENT:', JSON.stringify(patientRecord, null, 2));
 
         const { data: insertedPatient, error: patientError } = await supabase
-          .from('patients')
+          .from('user_patients')
           .insert(patientRecord)
           .select('id')
           .single();

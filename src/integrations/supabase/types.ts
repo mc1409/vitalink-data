@@ -204,15 +204,7 @@ export type Database = {
           workout_duration_minutes?: number | null
           workout_max_heart_rate?: number | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "biomarker_activity_patient_id_fkey"
-            columns: ["patient_id"]
-            isOneToOne: false
-            referencedRelation: "patients"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       biomarker_biological_genetic_microbiome: {
         Row: {
@@ -371,15 +363,7 @@ export type Database = {
           vitamin_b_production?: number | null
           vitamin_k_production?: number | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "biomarker_biological_genetic_microbiome_patient_id_fkey"
-            columns: ["patient_id"]
-            isOneToOne: false
-            referencedRelation: "patients"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       biomarker_heart: {
         Row: {
@@ -460,15 +444,7 @@ export type Database = {
           walking_heart_rate?: number | null
           workout_heart_rate?: number | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "biomarker_heart_patient_id_fkey"
-            columns: ["patient_id"]
-            isOneToOne: false
-            referencedRelation: "patients"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       biomarker_nutrition: {
         Row: {
@@ -588,15 +564,7 @@ export type Database = {
           water_intake_ml?: number | null
           zinc_mg?: number | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "biomarker_nutrition_patient_id_fkey"
-            columns: ["patient_id"]
-            isOneToOne: false
-            referencedRelation: "patients"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       biomarker_sleep: {
         Row: {
@@ -704,15 +672,7 @@ export type Database = {
           updated_at?: string
           wake_time?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "biomarker_sleep_patient_id_fkey"
-            columns: ["patient_id"]
-            isOneToOne: false
-            referencedRelation: "patients"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       clinical_diagnostic_cardiovascular: {
         Row: {
@@ -784,15 +744,7 @@ export type Database = {
           test_type?: string
           updated_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "clinical_diagnostic_cardiovascular_patient_id_fkey"
-            columns: ["patient_id"]
-            isOneToOne: false
-            referencedRelation: "patients"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       clinical_diagnostic_lab_tests: {
         Row: {
@@ -858,15 +810,7 @@ export type Database = {
           unit?: string | null
           updated_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "clinical_diagnostic_lab_tests_patient_id_fkey"
-            columns: ["patient_id"]
-            isOneToOne: false
-            referencedRelation: "patients"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       device_integrations: {
         Row: {
@@ -920,15 +864,7 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "device_integrations_patient_id_fkey"
-            columns: ["patient_id"]
-            isOneToOne: false
-            referencedRelation: "patients"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       document_processing_logs: {
         Row: {
@@ -982,15 +918,7 @@ export type Database = {
           upload_status?: string
           user_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "document_processing_logs_patient_id_fkey"
-            columns: ["patient_id"]
-            isOneToOne: false
-            referencedRelation: "patients"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       health_reports: {
         Row: {
@@ -1036,145 +964,6 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
-      }
-      patients: {
-        Row: {
-          address_line1: string | null
-          address_line2: string | null
-          city: string | null
-          country: string | null
-          created_at: string
-          date_of_birth: string
-          email: string | null
-          emergency_contact_name: string | null
-          emergency_contact_phone: string | null
-          emergency_contact_relationship: string | null
-          first_name: string
-          gender: string | null
-          id: string
-          insurance_group_number: string | null
-          insurance_policy_number: string | null
-          insurance_provider: string | null
-          last_name: string
-          medical_record_number: string | null
-          phone_primary: string | null
-          phone_secondary: string | null
-          primary_care_physician: string | null
-          profile_id: string | null
-          race_ethnicity: string | null
-          state: string | null
-          updated_at: string
-          user_id: string
-          zip_code: string | null
-        }
-        Insert: {
-          address_line1?: string | null
-          address_line2?: string | null
-          city?: string | null
-          country?: string | null
-          created_at?: string
-          date_of_birth: string
-          email?: string | null
-          emergency_contact_name?: string | null
-          emergency_contact_phone?: string | null
-          emergency_contact_relationship?: string | null
-          first_name: string
-          gender?: string | null
-          id?: string
-          insurance_group_number?: string | null
-          insurance_policy_number?: string | null
-          insurance_provider?: string | null
-          last_name: string
-          medical_record_number?: string | null
-          phone_primary?: string | null
-          phone_secondary?: string | null
-          primary_care_physician?: string | null
-          profile_id?: string | null
-          race_ethnicity?: string | null
-          state?: string | null
-          updated_at?: string
-          user_id: string
-          zip_code?: string | null
-        }
-        Update: {
-          address_line1?: string | null
-          address_line2?: string | null
-          city?: string | null
-          country?: string | null
-          created_at?: string
-          date_of_birth?: string
-          email?: string | null
-          emergency_contact_name?: string | null
-          emergency_contact_phone?: string | null
-          emergency_contact_relationship?: string | null
-          first_name?: string
-          gender?: string | null
-          id?: string
-          insurance_group_number?: string | null
-          insurance_policy_number?: string | null
-          insurance_provider?: string | null
-          last_name?: string
-          medical_record_number?: string | null
-          phone_primary?: string | null
-          phone_secondary?: string | null
-          primary_care_physician?: string | null
-          profile_id?: string | null
-          race_ethnicity?: string | null
-          state?: string | null
-          updated_at?: string
-          user_id?: string
-          zip_code?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "patients_profile_id_fkey"
-            columns: ["profile_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      profiles: {
-        Row: {
-          created_at: string
-          date_of_birth: string | null
-          display_name: string | null
-          gender: string | null
-          id: string
-          primary_patient_id: string | null
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          date_of_birth?: string | null
-          display_name?: string | null
-          gender?: string | null
-          id?: string
-          primary_patient_id?: string | null
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          date_of_birth?: string | null
-          display_name?: string | null
-          gender?: string | null
-          id?: string
-          primary_patient_id?: string | null
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "profiles_primary_patient_id_fkey"
-            columns: ["primary_patient_id"]
-            isOneToOne: false
-            referencedRelation: "patients"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       user_feedback: {
         Row: {

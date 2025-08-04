@@ -309,18 +309,19 @@ const HealthKitSync: React.FC<HealthKitSyncProps> = ({ userId }) => {
         throw new Error('User authentication required. Please log in again.');
       }
 
-      // Get the user's primary patient ID
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('primary_patient_id')
+      // Get the user's primary patient ID from the new user_patients table
+      const { data: patient, error: patientError } = await supabase
+        .from('user_patients')
+        .select('id')
         .eq('user_id', userId)
+        .eq('is_primary', true)
         .single();
 
-      if (profileError || !profile?.primary_patient_id) {
+      if (patientError || !patient?.id) {
         throw new Error('Patient profile not found. Please set up your patient profile first.');
       }
 
-      const patientId = profile.primary_patient_id;
+      const patientId = patient.id;
 
       // Determine sync range
       const endDate = new Date();
