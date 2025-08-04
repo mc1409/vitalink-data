@@ -5,6 +5,7 @@ import PatientSelector from '@/components/PatientSelector';
 import HealthIntelligenceDashboard from '@/components/HealthIntelligenceDashboard';
 import EnhancedHealthIntelligenceDashboard from '@/components/EnhancedHealthIntelligenceDashboard';
 import LabResultsTable from '@/components/LabResultsTable';
+import BiomarkerDataTable from '@/components/BiomarkerDataTable';
 import { usePatient } from '@/contexts/PatientContext';
 
 const PatientDashboard = () => {
@@ -45,6 +46,11 @@ const PatientDashboard = () => {
       {/* Lab Results Table */}
       {primaryPatient?.id && (
         <LabResultsTable patientId={primaryPatient.id} />
+      )}
+
+      {/* Biomarker Data Table */}
+      {primaryPatient?.id && (
+        <BiomarkerDataTable patientId={primaryPatient.id} />
       )}
 
       {/* Enhanced Health Intelligence Dashboard - Single Rolling Page with Full Explanations */}
