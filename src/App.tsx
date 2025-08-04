@@ -14,6 +14,7 @@ import RolesGPTHealth from "./pages/RolesGPTHealth";
 import SleepIntelligence from "./pages/SleepIntelligence";
 import HealthInsights from "./pages/HealthInsights";
 import HealthReports from "./pages/HealthReports";
+import ActivityAnalysis from "./pages/ActivityAnalysis";
 import NotFound from "./pages/NotFound";
 
 // Create QueryClient outside component to avoid React dispatcher issues
@@ -43,6 +44,7 @@ const App = () => {
                 <Route path="/patient-dashboard" element={<PatientDashboard />} />
                 <Route path="/rolesgpt-health" element={<RolesGPTHealth />} />
                 <Route path="/sleep-intelligence" element={<SleepIntelligence />} />
+                <Route path="/activity-analysis" element={<ActivityAnalysis />} />
                 <Route path="/health-insights" element={<HealthInsights />} />
                 <Route path="/health-reports" element={<HealthReports />} />
                 <Route path="*" element={<NotFound />} />

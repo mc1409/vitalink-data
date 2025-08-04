@@ -5,3 +5,6 @@ verify_jwt = true
 
 [functions.correlation-analyzer] 
 verify_jwt = true
+
+[functions.activity-analysis-agent]
+verify_jwt = true
