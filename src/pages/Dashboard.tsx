@@ -290,7 +290,39 @@ const Dashboard = () => {
             </div>
           </TabsContent>
 
-          <TabsContent value="upload">
+          <TabsContent value="upload" className="space-y-6">
+            {/* Patient Selection for Upload Tab */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-5 w-5" />
+                  Patient Selection for Document Processing
+                </CardTitle>
+                <CardDescription>
+                  Select the patient for whom you want to process medical documents. All extracted data will be linked to the selected patient.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <PatientSelector
+                  selectedPatientId={primaryPatient?.id || null}
+                  onPatientSelect={() => {}} 
+                  showCreateButton={true}
+                />
+                {primaryPatient && (
+                  <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+                    <div className="flex items-center gap-2 text-green-800">
+                      <Users className="h-4 w-4" />
+                      <span className="font-medium">Ready to Process Documents</span>
+                    </div>
+                    <div className="mt-1 text-sm text-green-700">
+                      Documents will be processed for: <strong>{primaryPatient.first_name} {primaryPatient.last_name}</strong>
+                      <div className="font-mono text-xs mt-1">Patient ID: {primaryPatient.id}</div>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+            
             <MedicalDataProcessor />
           </TabsContent>
 
