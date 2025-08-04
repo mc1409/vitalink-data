@@ -11,7 +11,8 @@ import { usePatient } from '@/contexts/PatientContext';
 const PatientDashboard = () => {
   const { primaryPatient, loading: primaryPatientLoading } = usePatient();
   
-  console.log('PatientDashboard - Current primary patient:', primaryPatient?.id, primaryPatient?.first_name, primaryPatient?.last_name);
+  console.log('🔍 PatientDashboard - Current primary patient ID:', primaryPatient?.id);
+  console.log('🔍 PatientDashboard - Primary patient details:', primaryPatient?.first_name, primaryPatient?.last_name);
 
   if (primaryPatientLoading) {
     return (
@@ -49,8 +50,15 @@ const PatientDashboard = () => {
       )}
 
       {/* Biomarker Data Table */}
-      {primaryPatient?.id && (
+      {primaryPatient?.id ? (
         <BiomarkerDataTable patientId={primaryPatient.id} />
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle>⚡ Biomarker Data</CardTitle>
+            <CardDescription>Please select a patient to view biomarker data from Apple HealthKit and other sources</CardDescription>
+          </CardHeader>
+        </Card>
       )}
 
       {/* Enhanced Health Intelligence Dashboard - Single Rolling Page with Full Explanations */}

@@ -33,13 +33,27 @@ const BiomarkerDataTable: React.FC<BiomarkerDataTableProps> = ({ patientId }) =>
   const [sortBy, setSortBy] = useState<'date' | 'metric' | 'category'>('date');
 
   useEffect(() => {
+    if (!patientId) {
+      setLoading(false);
+      return;
+    }
+
+    console.log('🔍 BiomarkerDataTable - Fetching data for Patient ID:', patientId);
     fetchBiomarkerData();
   }, [patientId]);
 
   const fetchBiomarkerData = async () => {
+    if (!patientId) {
+      console.log('❌ No patient ID provided to BiomarkerDataTable');
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
+
+      console.log('📡 Fetching biomarker data for patient:', patientId);
 
       // Fetch data from all biomarker tables in parallel
       const [heartData, sleepData, activityData, nutritionData, advancedData] = await Promise.all([
